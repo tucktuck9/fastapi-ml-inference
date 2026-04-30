@@ -22,6 +22,7 @@ services:
   - type: web
     name: fastapi-ml-inference-backend
     runtime: docker
+    rootDir: typescript-react
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     plan: pro
@@ -60,6 +61,7 @@ services:
   - type: pserv
     name: fastapi-ml-inference-library
     runtime: docker
+    rootDir: typescript-react
     dockerfilePath: ./library/Dockerfile
     dockerContext: ./library
     plan: starter
@@ -76,6 +78,7 @@ services:
   - type: web
     name: fastapi-ml-inference-frontend
     runtime: docker
+    rootDir: typescript-react
     dockerfilePath: ./frontend/Dockerfile
     dockerContext: ./frontend
     plan: starter

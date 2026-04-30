@@ -165,6 +165,7 @@ envVars:
 Add your nearest `region` in the [`typescript-react/render.yaml`](./typescript-react/render.yaml) or [`vanilla-js/render.yaml`](./vanilla-js/render.yaml). Click the **Deploy to Render** button at the top of this page. You'll need to:
 
 1. Enter a blueprint name
+2. For **Blueprint Path**, enter either `vanilla-js/render.yaml` or `typescript-react/render.yaml`
 2. Enter your `TMDB_API_KEY` and `HF_TOKEN` 
 3. Click **Deploy Blueprint**
 4. Wait for all services to deploy (Redis, Postgres, Library, API, Frontend)
