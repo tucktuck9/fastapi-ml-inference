@@ -73,19 +73,14 @@ services:
       # serves browser traffic; only the backend (same trust boundary) talks
       # to it. CORS in the library service is a no-op in practice.
 
-  - type: static
+  - type: web
     name: fastapi-ml-inference-frontend
-    # Render runs buildCommand in the repo directly (not inside a Docker image),
-    # so envVars below are available to Vite at build time — which is when
-    # VITE_* variables must be set (they are inlined into the JS bundle).
-    rootDir: typescript-react/frontend
-    buildCommand: npm ci && npm run build
-    staticPublishPath: dist
-    pullRequestPreviewsEnabled: true
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
+    runtime: docker
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    plan: starter
+    region: oregon
+    healthCheckPath: /
     envVars:
       - key: VITE_BACKEND_URL
         fromService:
