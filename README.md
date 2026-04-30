@@ -121,7 +121,7 @@ The fastest local path is Docker Compose, which mirrors the multi-service Render
    HF_TOKEN=your_readonly_hf_token_here
    ```
 
-4. **Optional:** Swap the default model for any other text-classification model on the [Hugging Face Hub](https://huggingface.co/models?pipeline_tag=text-classification):
+4. **Optional:** Swap the default model for any other text-classification model on the [Hugging Face Hub](https://huggingface.co/spaces?sort=likes&search=text+classification):
 
    ```bash
    MODEL_ID=the-hf-org/the-model
