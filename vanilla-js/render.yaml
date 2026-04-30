@@ -1,0 +1,89 @@
+databases:
+  - name: fastapi-ml-inference-library-db
+    plan: basic-256mb
+    postgresMajorVersion: "16"
+    # Available regions: oregon, ohio, virginia, frankfurt, singapore
+    region: oregon
+    # Lock public access; the library service connects via the internal
+    # Render network using fromDatabase below.
+    ipAllowList: []
+
+services:
+  # Managed Redis: emotion scores are cached keyed by review_id with a 7-day TTL.
+  # The backend degrades gracefully when REDIS_URL is unset, so removing this
+  # service only disables caching — inference still works.
+  - type: redis
+    name: fastapi-ml-inference-cache
+    plan: starter
+    region: oregon
+    # Lock public access; the backend connects via Render's private network.
+    ipAllowList: []
+
+  - type: web
+    name: fastapi-ml-inference-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: pro
+    region: oregon
+    healthCheckPath: /ready
+    disk:
+      name: hf-model-cache
+      mountPath: /model_cache
+      sizeGB: 10
+    envVars:
+      - key: TMDB_API_KEY
+        sync: false
+      - key: HF_TOKEN
+        sync: false
+      - key: FRONTEND_URL
+        fromService:
+          type: web
+          name: fastapi-ml-inference-frontend
+          envVarKey: RENDER_EXTERNAL_URL
+      # Internal hostname of the private library service. Render exposes
+      # private services at http://<service-name>:<port> on its private
+      # network; this URL is never reachable from the public internet.
+      - key: LIBRARY_URL
+        fromService:
+          type: pserv
+          name: fastapi-ml-inference-library
+          property: hostport
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: fastapi-ml-inference-cache
+          property: connectionString
+
+  # Private (pserv) service: no public URL, only reachable over Render's
+  # internal network from the backend. The browser cannot hit this directly.
+  - type: pserv
+    name: fastapi-ml-inference-library
+    runtime: docker
+    dockerfilePath: ./library/Dockerfile
+    dockerContext: ./library
+    plan: starter
+    region: oregon
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: fastapi-ml-inference-library-db
+          property: connectionString
+      # The library service does not need FRONTEND_URL because it never
+      # serves browser traffic; only the backend (same trust boundary) talks
+      # to it. CORS in the library service is a no-op in practice.
+
+  - type: web
+    name: fastapi-ml-inference-frontend
+    runtime: docker
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    plan: starter
+    region: oregon
+    healthCheckPath: /
+    envVars:
+      - key: BACKEND_URL
+        fromService:
+          type: web
+          name: fastapi-ml-inference-backend
+          envVarKey: RENDER_EXTERNAL_URL

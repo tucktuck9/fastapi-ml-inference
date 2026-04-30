@@ -1,0 +1,717 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Movie Vibes</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* ========================================== */
+    /*           THEME TOKENS                     */
+    /* ========================================== */
+    :root {
+      --imdb-yellow: #f5c518;
+      --imdb-yellow-hover: #e6b800;
+      --imdb-blue: #5799ef;
+
+      /* Dark theme tokens (detail page) */
+      --bg: #0e0e0f;
+      --bg-elev: #1a1a1c;
+      --bg-elev-2: #232326;
+      --border: #2a2a2e;
+      --text: #e6e6e6;
+      --text-muted: #b8b8b8;
+      --text-faint: #8a8a8a;
+
+      --radius: 4px;
+      --radius-lg: 8px;
+    }
+
+    /* Light theme tokens, scoped to the watchlist view. */
+    .view[data-theme="light"] {
+      --bg: #ffffff;
+      --bg-elev: #f7f7f7;
+      --bg-elev-2: #ededed;
+      --border: #e3e3e3;
+      --text: #1a1a1a;
+      --text-muted: #555555;
+      --text-faint: #888888;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      background: #0e0e0f;
+      color: #e6e6e6;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    body:has(.view[data-theme="light"].active) { background: #ffffff; color: #1a1a1a; }
+    a { color: var(--imdb-blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ========================================== */
+    /*           TOP HEADER                       */
+    /* ========================================== */
+    .topbar {
+      background: #121212;
+      border-bottom: 1px solid #000;
+      position: sticky; top: 0; z-index: 50;
+    }
+    .topbar-inner {
+      max-width: 1024px; margin: 0 auto;
+      display: flex; align-items: center; gap: 16px;
+      padding: 24px 16px;
+    }
+    .logo {
+      background: var(--imdb-yellow);
+      color: #000; font-weight: 800; font-size: 1.2rem;
+      padding: 6px 12px; border-radius: var(--radius);
+      letter-spacing: -0.02em;
+      flex-shrink: 0;
+    }
+    .topsearch {
+      flex: 1; display: flex; align-items: center;
+      background: #fff; border-radius: var(--radius);
+      padding: 0 12px; min-height: 40px;
+    }
+    .topsearch input {
+      flex: 1; border: 0; outline: 0; background: transparent;
+      font-size: 0.95rem; color: #111; padding: 10px 8px;
+      font-family: inherit;
+    }
+    .topsearch .search-icon { color: #555; font-size: 1rem; }
+    .topsearch button {
+      border: 0; background: var(--imdb-yellow); color: #000;
+      padding: 8px 14px; font-weight: 700; cursor: pointer;
+      border-radius: var(--radius); font-size: 0.9rem;
+      margin: 4px -8px 4px 4px;
+    }
+    .topsearch button:hover { background: var(--imdb-yellow-hover); }
+    .top-nav-link {
+      color: #fff; font-weight: 600; font-size: 0.9rem;
+      padding: 8px 12px; border-radius: var(--radius);
+      cursor: pointer; user-select: none;
+    }
+    .top-nav-link:hover { background: #222; }
+    .top-nav-link.active { color: var(--imdb-yellow); }
+
+    /* ========================================== */
+    /*           LAYOUT                           */
+    /* ========================================== */
+    .view { display: none; }
+    .view.active { display: block; }
+    .container { max-width: 1024px; margin: 0 auto; padding: 0 16px; }
+
+    /* ========================================== */
+    /*           DETAIL PAGE (DARK)               */
+    /* ========================================== */
+    .detail-header {
+      padding: 20px 0 12px;
+    }
+    .detail-title { font-size: 1.9rem; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.01em; }
+    .detail-meta {
+      display: flex; gap: 12px; flex-wrap: wrap;
+      color: var(--text-muted); font-size: 0.95rem;
+    }
+    .detail-meta .dot { color: var(--text-faint); }
+
+    .hero {
+      background: #000; border-radius: var(--radius-lg);
+      overflow: hidden; margin-bottom: 16px;
+      display: grid; grid-template-columns: 220px 1fr;
+      min-height: 320px;
+    }
+    .hero-poster {
+      background: #000; display: flex; align-items: stretch; justify-content: center;
+    }
+    .hero-poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .hero-backdrop {
+      position: relative; background: #000;
+      display: flex; flex-direction: column; justify-content: flex-end;
+      padding: 20px; min-height: 320px;
+      background-size: cover; background-position: center;
+    }
+    .hero-backdrop::before {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.85) 100%);
+    }
+    .hero-content { position: relative; z-index: 1; }
+    .hero-tagline {
+      color: #fff; font-size: 1.05rem; font-style: italic;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+      margin: 0 0 8px;
+    }
+    .hero-tagline {
+      display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px;
+    }
+    .reaction {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(255,255,255,0.12);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 0.85rem; font-weight: 600;
+      color: #fff;
+    }
+    .reaction.rank-0 { background: rgba(245,197,24,0.22); border-color: rgba(245,197,24,0.5); }
+    .reaction-emoji { font-size: 1rem; }
+    .reaction-score { color: #fff; opacity: 0.9; font-variant-numeric: tabular-nums; }
+
+    .plot-card {
+      display: grid; grid-template-columns: 140px 1fr; gap: 20px;
+      padding: 16px 0; border-bottom: 1px solid var(--border);
+    }
+    .plot-card .mini-poster img { width: 140px; border-radius: var(--radius); display: block; }
+    .plot-card p { margin: 0; line-height: 1.5; color: var(--text); font-size: 0.98rem; }
+
+    .chip-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 0.85rem; font-weight: 500;
+      cursor: default;
+    }
+    .chip-arrow { font-size: 0.7rem; opacity: 0.6; }
+
+    .rating-block {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 8px 14px; border-radius: var(--radius);
+      background: var(--bg-elev); border: 1px solid var(--border);
+      font-size: 0.9rem;
+    }
+    .rating-block .star { color: var(--imdb-yellow); font-size: 1.05rem; }
+    .rating-block .score { font-weight: 700; }
+    .rating-block .denom { color: var(--text-faint); }
+
+    .cta-watchlist {
+      display: flex; align-items: center; justify-content: space-between;
+      width: 100%; padding: 14px 18px;
+      background: var(--imdb-yellow); color: #000;
+      border: 0; border-radius: var(--radius);
+      font-weight: 700; font-size: 1rem;
+      cursor: pointer; margin-top: 16px;
+      font-family: inherit;
+      transition: background 0.15s;
+    }
+    .cta-watchlist:hover:not(:disabled) { background: var(--imdb-yellow-hover); }
+    .cta-watchlist:disabled { background: #4a4a4a; color: #ccc; cursor: not-allowed; }
+    .cta-watchlist.saved { background: #2a2a2e; color: #fff; border: 1px solid var(--border); }
+    .cta-watchlist.saved:hover { background: #353539; }
+    .cta-watchlist .cta-icon { font-size: 1.2rem; font-weight: 800; }
+    .cta-watchlist .cta-label { flex: 1; text-align: left; padding-left: 10px; }
+    .cta-watchlist .cta-meta { font-weight: 500; opacity: 0.7; font-size: 0.85rem; }
+
+    .section-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 0; border-bottom: 1px solid var(--border);
+      font-size: 1rem;
+    }
+    .section-row .section-title { font-weight: 700; }
+    .section-row .section-meta { color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+
+    .inference-line {
+      color: var(--text-faint); font-size: 0.78rem; margin: 16px 0 8px;
+      font-style: italic;
+    }
+
+    .view[data-theme="light"] .reaction {
+      background: #f0f0f0; border-color: #e3e3e3; color: #1a1a1a;
+    }
+    .view[data-theme="light"] .reaction.rank-0 {
+      background: rgba(245,197,24,0.25); border-color: rgba(245,197,24,0.7); color: #1a1a1a;
+    }
+
+    /* ========================================== */
+    /*           WATCHLIST PAGE (LIGHT)           */
+    /* ========================================== */
+    .wl-header {
+      padding: 24px 0 12px;
+    }
+    .wl-title { font-size: 1.6rem; font-weight: 700; margin: 0 0 4px; }
+    .wl-subtitle { color: var(--text-muted); font-size: 0.9rem; margin: 0; }
+
+    .wl-search {
+      display: flex; align-items: center; gap: 8px;
+      background: #fff; border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 0 12px;
+      margin: 12px 0;
+    }
+    .wl-search input {
+      flex: 1; border: 0; outline: 0; padding: 12px 0;
+      font-size: 0.95rem; font-family: inherit; color: #111; background: transparent;
+    }
+
+    .wl-filters {
+      display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;
+    }
+    .wl-filter-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #fff; border: 1px solid var(--border);
+      border-radius: 999px; padding: 8px 14px;
+      font-size: 0.85rem; color: var(--text); cursor: pointer;
+      font-family: inherit;
+    }
+    .wl-filter-chip:hover { background: var(--bg-elev); }
+    .wl-filter-chip .caret { font-size: 0.65rem; opacity: 0.6; }
+    .wl-filter-chip.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+
+    .wl-meta-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 0 10px;
+    }
+    .wl-meta-bar .wl-count {
+      font-size: 0.95rem; line-height: 1.3;
+    }
+    .wl-meta-bar .wl-count strong { font-weight: 700; }
+    .wl-meta-bar .wl-count .sortline { color: var(--text-muted); font-size: 0.8rem; }
+
+    .wl-list { padding-bottom: 80px; }
+    .wl-item {
+      display: grid; grid-template-columns: 80px 1fr auto;
+      gap: 16px; padding: 16px 0;
+      border-bottom: 1px solid var(--border); align-items: start;
+    }
+    .wl-item .wl-poster-wrap { position: relative; width: 80px; }
+    .wl-item .wl-poster { width: 80px; aspect-ratio: 2/3; border-radius: var(--radius); display: block; background: var(--bg-elev-2); object-fit: cover; }
+    .wl-item .wl-bookmark {
+      position: absolute; top: -2px; left: 6px; width: 22px; height: 30px;
+      background: var(--imdb-yellow);
+      clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%);
+      display: flex; align-items: flex-start; justify-content: center;
+      padding-top: 4px; color: #000; font-size: 0.7rem; font-weight: 800;
+    }
+    .wl-item .wl-body { min-width: 0; }
+    .wl-item .wl-name { font-size: 1rem; font-weight: 600; margin: 0 0 4px; line-height: 1.3; }
+    .wl-item .wl-line { color: var(--text-muted); font-size: 0.85rem; margin: 2px 0; display: flex; gap: 8px; flex-wrap: wrap; }
+    .wl-item .wl-rating { display: inline-flex; align-items: center; gap: 4px; font-size: 0.9rem; margin-top: 4px; }
+    .wl-item .wl-rating .star { color: var(--imdb-yellow); }
+    .wl-item .wl-rating .score { font-weight: 600; color: var(--text); }
+    .wl-item .wl-cta { color: var(--imdb-blue); font-size: 0.9rem; font-weight: 500; margin-top: 6px; cursor: pointer; }
+    .wl-item .wl-emotion-row {
+      display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px;
+    }
+    .wl-item .wl-emotion {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: var(--bg-elev); border: 1px solid var(--border);
+      border-radius: 999px; padding: 3px 10px;
+      font-size: 0.75rem; color: var(--text-muted);
+    }
+    .wl-item .wl-emotion .em-emoji { font-size: 0.9rem; }
+    .wl-item .wl-actions { display: flex; align-items: flex-start; }
+    .wl-item .wl-menu {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: transparent; border: 0; cursor: pointer;
+      color: var(--text-muted); font-size: 1.2rem; line-height: 1;
+      display: flex; align-items: center; justify-content: center;
+      font-family: inherit;
+    }
+    .wl-item .wl-menu:hover { background: var(--bg-elev); color: var(--text); }
+
+    .wl-empty {
+      text-align: center; color: var(--text-muted);
+      padding: 60px 20px; font-size: 0.95rem;
+    }
+    .wl-empty .wl-empty-icon { font-size: 3rem; margin-bottom: 12px; opacity: 0.5; }
+
+    /* ========================================== */
+    /*           REVIEWS SECTION                  */
+    /* ========================================== */
+    .reviews-section {
+      padding: 16px 0; border-bottom: 1px solid var(--border);
+    }
+    .reviews-section h3 {
+      margin: 0 0 8px; font-size: 1rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px;
+    }
+    .reviews-section .section-meta {
+      color: var(--text-muted); font-size: 0.85rem; font-weight: 500;
+    }
+    .reviews-overall {
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      padding: 10px 0 14px;
+    }
+    .reviews-overall .overall-label {
+      color: var(--text-muted); font-size: 0.85rem; font-weight: 600;
+    }
+    .review-card {
+      padding: 16px 0; border-top: 1px solid var(--border);
+    }
+    .review-card:first-of-type { border-top: 0; }
+    .review-card .review-head {
+      display: flex; align-items: baseline; gap: 8px;
+      margin-bottom: 8px;
+    }
+    .review-card .review-author { font-weight: 600; font-size: 0.95rem; }
+    .review-card .review-rating {
+      display: inline-flex; align-items: center; gap: 4px;
+      color: var(--text-muted); font-size: 0.85rem;
+    }
+    .review-card .review-rating .star { color: var(--imdb-yellow); }
+    .review-card .review-content {
+      margin: 0 0 10px; line-height: 1.55; color: var(--text);
+      font-size: 0.95rem;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .review-empty {
+      color: var(--text-muted); font-size: 0.9rem; padding: 12px 0 4px;
+    }
+    .reviews-view-all {
+      display: inline-flex; align-items: center; gap: 4px;
+      color: var(--imdb-blue); font-size: 0.9rem; font-weight: 500;
+      margin-top: 8px; cursor: pointer; user-select: none;
+      background: transparent; border: 0; padding: 6px 0;
+      font-family: inherit;
+    }
+    .reviews-view-all:hover { text-decoration: underline; }
+
+    .all-reviews-header { padding: 24px 0 8px; }
+    .all-reviews-back {
+      display: inline-flex; align-items: center; gap: 4px;
+      color: var(--imdb-blue); font-size: 0.9rem; cursor: pointer;
+      background: transparent; border: 0; padding: 4px 0; margin-bottom: 12px;
+      font-family: inherit;
+    }
+    .all-reviews-back:hover { text-decoration: underline; }
+    .all-reviews-title {
+      font-size: 1.6rem; font-weight: 700; margin: 0 0 4px;
+    }
+    .all-reviews-sub {
+      color: var(--text-muted); font-size: 0.9rem; margin: 0 0 12px;
+    }
+    .load-more-btn {
+      display: block; width: 100%;
+      padding: 12px 16px; margin: 16px 0 80px;
+      background: transparent; color: var(--text);
+      border: 1px solid var(--border); border-radius: var(--radius);
+      font-weight: 600; font-size: 0.9rem; cursor: pointer;
+      font-family: inherit;
+    }
+    .load-more-btn:hover:not(:disabled) { background: var(--bg-elev); }
+    .load-more-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .review-skeleton {
+      padding: 14px 0; border-top: 1px solid var(--border);
+    }
+    .review-skeleton:first-of-type { border-top: 0; }
+    .review-skeleton .sk-line {
+      height: 12px; margin: 6px 0; border-radius: 3px;
+    }
+    .review-skeleton .sk-author { width: 30%; height: 14px; }
+    .review-skeleton .sk-text-1 { width: 95%; }
+    .review-skeleton .sk-text-2 { width: 80%; }
+    .review-skeleton .sk-chips { width: 50%; height: 22px; margin-top: 10px; border-radius: 999px; }
+
+    /* ========================================== */
+    /*           LOADING / ERRORS                 */
+    /* ========================================== */
+    .loading, .error {
+      padding: 40px 20px; text-align: center; font-size: 0.95rem;
+    }
+    .loading { color: var(--text-muted); }
+    .error { color: #ff6b6b; }
+    .skeleton {
+      background: linear-gradient(90deg, var(--bg-elev) 0%, var(--bg-elev-2) 50%, var(--bg-elev) 100%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
+      border-radius: var(--radius);
+    }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    /* ========================================== */
+    /*           TOAST                            */
+    /* ========================================== */
+    .toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: #1a1a1c; color: #fff; padding: 12px 20px;
+      border-radius: var(--radius); border: 1px solid #333;
+      font-size: 0.9rem; font-weight: 500;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s;
+      z-index: 100;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+
+    /* ========================================== */
+    /*           BOTTOM TAB BAR                   */
+    /* ========================================== */
+    .bottombar {
+      display: none;
+      position: fixed; left: 0; right: 0; bottom: 0;
+      background: #121212; border-top: 1px solid #000;
+      z-index: 50;
+    }
+    body:has(.view[data-theme="light"].active) .bottombar {
+      background: #fff; border-top: 1px solid #e3e3e3;
+    }
+    .bottombar-inner {
+      max-width: 1024px; margin: 0 auto;
+      display: grid; grid-template-columns: 1fr 1fr;
+    }
+    .bottombar a {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 10px 0 12px; color: #aaa; font-size: 0.7rem;
+      text-decoration: none; cursor: pointer;
+    }
+    body:has(.view[data-theme="light"].active) .bottombar a { color: #555; }
+    .bottombar a.active { color: var(--imdb-yellow); }
+    .bottombar a .bb-icon { font-size: 1.4rem; line-height: 1; margin-bottom: 2px; }
+
+    /* ========================================== */
+    /*           RESPONSIVE                       */
+    /* ========================================== */
+    @media (max-width: 720px) {
+      .topsearch button { display: none; }
+      .top-nav-link { display: none; }
+      .bottombar { display: block; }
+      .container { padding-bottom: 80px; }
+      .tmdb-attribution { padding-bottom: 84px; }
+      .hero { grid-template-columns: 140px 1fr; min-height: 240px; }
+      .hero-backdrop { min-height: 240px; }
+      .plot-card { grid-template-columns: 100px 1fr; gap: 14px; }
+      .plot-card .mini-poster img { width: 100px; }
+      .detail-title { font-size: 1.5rem; }
+    }
+    @media (max-width: 480px) {
+      .hero { grid-template-columns: 1fr; }
+      .hero-poster { display: none; }
+    }
+    
+    /* ========================================== */
+    /*           TMDB ATTRIBUTION                 */
+    /* ========================================== */
+    .tmdb-attribution {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 24px;
+      background: #121212;
+      border-top: 1px solid #000;
+      margin-top: auto;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .tmdb-logo {
+      height: 16px;
+      width: auto;
+      opacity: 0.7;
+      flex-shrink: 0;
+    }
+    .tmdb-notice {
+      margin: 0;
+      font-size: 0.78rem;
+      color: var(--text-faint, #8a8a8a);
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <!-- ========================================== -->
+  <!--           TOP BAR                          -->
+  <!-- ========================================== -->
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="logo">Movie Vibes</div>
+      <div class="topsearch">
+        <span class="search-icon">🔍</span>
+        <input id="title" type="text" placeholder="Search a movie title..." autocomplete="off" />
+        <button onclick="search()">Search</button>
+      </div>
+      <div class="top-nav-link active" data-view="search-view" onclick="switchView('search-view')">Home</div>
+      <div class="top-nav-link" data-view="library-view" onclick="switchView('library-view')">Watchlist</div>
+    </div>
+  </header>
+
+  <!-- ========================================== -->
+  <!--           SEARCH / DETAIL VIEW             -->
+  <!-- ========================================== -->
+  <main id="search-view" class="view active" data-theme="dark">
+    <div class="container">
+      <div id="loading" class="loading" style="display:none;">Fetching movie and running inference...</div>
+      <div id="error" class="error" style="display:none;"></div>
+
+      <div id="empty-state" class="loading" style="padding:80px 20px;">
+        <div style="font-size:3rem; opacity:0.4; margin-bottom:12px;">🎬</div>
+        <div>Search for a movie to see how reviewers felt about it.</div>
+        <div style="font-size:0.85rem; color:var(--text-faint); margin-top:8px;">Try: <em>Inception</em>, <em>Parasite</em>, <em>Hereditary</em>...</div>
+      </div>
+
+      <div id="result" style="display:none;">
+        <div class="detail-header">
+          <h1 id="movie-title" class="detail-title"></h1>
+          <div id="movie-meta" class="detail-meta"></div>
+        </div>
+
+        <div class="hero">
+          <div class="hero-poster">
+            <img id="poster" src="" alt="Movie poster" loading="lazy" />
+          </div>
+          <div id="hero-backdrop" class="hero-backdrop">
+            <div class="hero-content">
+              <div id="tagline" class="hero-tagline"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="chip-row" id="genres"></div>
+
+        <div style="margin-bottom:8px;">
+          <span id="rating-block" class="rating-block" style="display:none;">
+            <span class="star">★</span>
+            <span class="score" id="rating-score"></span>
+            <span class="denom" id="rating-denom"></span>
+          </span>
+        </div>
+
+        <div class="plot-card">
+          <div class="mini-poster">
+            <img id="mini-poster" src="" alt="" loading="lazy" />
+          </div>
+          <p id="plot"></p>
+        </div>
+
+        <button id="save-button" class="cta-watchlist" onclick="saveCurrent()">
+          <span class="cta-icon">+</span>
+          <span class="cta-label">Add to Watchlist</span>
+          <span class="cta-meta" id="save-meta"></span>
+        </button>
+
+        <!-- ========================================== -->
+        <!--           REVIEWS SECTION                  -->
+        <!-- ========================================== -->
+        <section id="reviews-section" class="reviews-section" style="display:none;">
+          <h3>
+            <span>💬 What reviewers felt</span>
+            <span class="section-meta" id="reviews-count-meta"></span>
+          </h3>
+          <p class="inference-line" style="margin:4px 0 0;">Emotions reflect how reviewers <em>felt writing</em> the review — not the film's tone.</p>
+          <div id="reviews-overall" class="reviews-overall" style="display:none;">
+            <span class="overall-label">Overall mood:</span>
+            <div id="reviews-overall-chips" class="reactions"></div>
+          </div>
+          <div id="reviews-list"></div>
+          <button id="reviews-view-all" class="reviews-view-all" style="display:none;" onclick="openAllReviews()">
+            View all reviews ›
+          </button>
+        </section>
+
+        <div class="section-row" onclick="switchView('library-view')" style="cursor:pointer;">
+          <span class="section-title">Your Watchlist</span>
+          <span class="section-meta">
+            <span id="wl-count-inline">View all</span>
+            <span style="opacity:0.6;">›</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ========================================== -->
+  <!--           ALL REVIEWS VIEW                 -->
+  <!-- ========================================== -->
+  <main id="reviews-view" class="view" data-theme="dark">
+    <div class="container">
+      <div class="all-reviews-header">
+        <button class="all-reviews-back" onclick="backToDetail()">‹ Back to movie</button>
+        <h1 id="all-reviews-title" class="all-reviews-title">Reviews</h1>
+        <p id="all-reviews-sub" class="all-reviews-sub"></p>
+      </div>
+      <div id="all-reviews-list"></div>
+      <button id="all-reviews-load-more" class="load-more-btn" style="display:none;" onclick="loadMoreReviews()">
+        Load more reviews
+      </button>
+    </div>
+  </main>
+
+  <!-- ========================================== -->
+  <!--           WATCHLIST VIEW                   -->
+  <!-- ========================================== -->
+  <main id="library-view" class="view" data-theme="light">
+    <div class="container">
+      <div class="wl-header">
+        <h1 class="wl-title">Watchlist</h1>
+        <p class="wl-subtitle">Movies you've saved, with the emotion snapshot captured at the moment of save.</p>
+      </div>
+
+      <div class="wl-search">
+        <span style="color:#777;">🔍</span>
+        <input id="wl-filter" type="text" placeholder="Search this page" oninput="renderLibrary()" />
+      </div>
+
+      <div id="wl-filters" class="wl-filters">
+        <button class="wl-filter-chip active" data-filter="all" onclick="setEmotionFilter('all')">All<span class="caret">▾</span></button>
+      </div>
+
+      <div class="wl-meta-bar">
+        <div class="wl-count">
+          <div><strong id="wl-count">0 Titles</strong></div>
+          <div class="sortline">Sorted by Date Added</div>
+        </div>
+      </div>
+
+      <div id="library-list" class="wl-list">
+        <div class="wl-empty">
+          <div class="wl-empty-icon">⏳</div>
+          <div>Loading...</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ========================================== -->
+  <!--           BOTTOM TAB BAR                   -->
+  <!-- ========================================== -->
+  <nav class="bottombar" aria-label="Primary">
+    <div class="bottombar-inner">
+      <a class="bb-link active" data-view="search-view" onclick="switchView('search-view')">
+        <span class="bb-icon">🏠</span>Home
+      </a>
+      <a class="bb-link" data-view="library-view" onclick="switchView('library-view')">
+        <span class="bb-icon">📑</span>Watchlist
+      </a>
+    </div>
+  </nav>
+
+  <!-- ========================================== -->
+  <!--           TOAST & SCRIPTS                  -->
+  <!-- ========================================== -->
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script>window.ENV = __ENV_JSON__;</script>
+<script src="/static/utils.js"></script>
+<script src="/static/api.js"></script>
+<script src="/static/reviews.js"></script>
+<script src="/static/search.js"></script>
+<script src="/static/library.js"></script>
+<script src="/static/app.js"></script>
+
+<!-- TMDB Attribution -->
+<footer class="tmdb-attribution">
+  <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer">
+    <img
+      src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_short-8e7b30f73a4020692ccca9c88bafe5dcb6f8a62a4c6bc55cd9ba82bb2cd95f6c.svg"
+      alt="TMDB logo"
+      class="tmdb-logo"
+    />
+  </a>
+  <p class="tmdb-notice">
+    This demo uses the TMDB API but is not endorsed or certified by TMDB.
+  </p>
+</footer>
+
+</body>
+</html>
