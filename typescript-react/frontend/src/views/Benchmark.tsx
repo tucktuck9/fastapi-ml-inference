@@ -182,9 +182,10 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
   const predict = useCallback(async (): Promise<void> => {
     setRunning(true);
     try {
-      const { data, ms } = await runPredict(text);
-      setSumLatency(ms + ' ms');
-      _appendLog('POST /predict', data, ms);
+      const { data, ms, cache_hit } = await runPredict(text);
+      const label = cache_hit ? 'POST /predict [CACHE HIT]' : 'POST /predict';
+      setSumLatency(ms + ' ms' + (cache_hit ? ' ⚡ cached' : ''));
+      _appendLog(label, data, ms);
       await refreshStatus();
     } finally {
       setRunning(false);

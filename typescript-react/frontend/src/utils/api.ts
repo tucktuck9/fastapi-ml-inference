@@ -154,17 +154,17 @@ export async function fetchModelStatus(): Promise<ModelStatus | null> {
 /**
  * Run a single emotion inference prediction.
  * @param text - The text to classify.
- * @returns The raw JSON prediction result and elapsed milliseconds.
+ * @returns The raw JSON prediction result, elapsed milliseconds, and cache hit status.
  */
-export async function runPredict(text: string): Promise<{ data: unknown; ms: number }> {
+export async function runPredict(text: string): Promise<{ data: unknown; ms: number; cache_hit: boolean }> {
   const t0 = performance.now();
   const resp = await fetch(BACKEND_URL + '/predict', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text }),
   });
-  const data: unknown = await resp.json();
-  return { data, ms: Math.round(performance.now() - t0) };
+  const data = await resp.json() as { cache_hit?: boolean };
+  return { data, ms: Math.round(performance.now() - t0), cache_hit: !!data.cache_hit };
 }
 
 /** Shape of a /predict response, narrowed to the timing fields used by burst analysis. */
