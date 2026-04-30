@@ -32,8 +32,24 @@ A movie discovery app powered by an open-source emotion model. The stack is made
 - 🗄️ **Redis emotion cache** — emotion scores are cached in a managed [Key Value](https://render.com/docs/key-value) instance keyed by `review_id` with a 7-day TTL. Cache hits skip the forward pass entirely. Redis is optional: if `REDIS_URL` is unset, inference runs uncached and the app is otherwise unchanged.
 - 🔗 **Infrastructure as Code** — Render's [Blueprint spec](https://render.com/docs/blueprint-spec) `fromService`, `fromDatabase`, and the new Redis `connectionString` inject every inter-service URL at deploy time, so no secrets are copy-pasted between dashboards.
 
-> ⚛️ **Prefer React?**
-> The `main` branch is dependency-free vanilla JavaScript to keep the focus on the ML backend. A React 18 + Vite version lives on the [`with-react`](https://github.com/tucktuck9/hf-inference-app/tree/with-react) branch.
+## Project structure
+
+This project ships two interchangeable frontends — pick one and use it throughout. Backend, library, Redis, and Postgres are identical across both; only the frontend differs.
+
+```
+    fastapi-ml-inference/
+    ├── vanilla-js/         # vanilla HTML + JS frontend (served by FastAPI)
+    │   ├── backend/
+    │   ├── library/
+    │   ├── frontend/
+    │   └── render.yaml
+    ├── typescript-react/   # Vite + TypeScript-React frontend
+    │   ├── backend/
+    │   ├── library/
+    │   ├── frontend/
+    │   └── render.yaml
+    └── scripts/
+```
 
 ## Architecture
 
@@ -115,10 +131,10 @@ The fastest local path is Docker Compose, which mirrors the multi-service Render
 5. Start every service.
 
     ```bash
-    # TypeScript + React
+    # Run TypeScript + React frontend
     docker-compose -f typescript-react/docker-compose.yml up --build
 
-    # Vanilla JS
+    # Run Vanilla JS + HTML frontend
     docker-compose -f vanilla-js/docker-compose.yml up --build
     ```
 
