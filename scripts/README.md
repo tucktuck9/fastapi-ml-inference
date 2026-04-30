@@ -1,22 +1,22 @@
 # Scripts
 
-One-time setup scripts for scaffolding the repo. Contributors don't run these — they run `docker-compose up`. These are for the project owner (or anyone adding a new variant) to bootstrap the directory tree and the React frontend with reproducible, exact-pinned dependencies.
+One-time scaffolding scripts for project owners to bootstrap new variants with exact-pinned, reproducible environments. (Contributors don't need these — follow the main [README.md](../README.md) instead.)
 
 ## Requirements
 
-- Node 24+ (current LTS; v20 reached EOL 2026-04-30)
+- Node 24+
 - npm 11+
 - jq 1.7+
 
 ## Why these exist
 
-- **Reproducibility.** ML projects are sensitive to dependency drift — a silent minor-version bump in a tokenizer or numerical library can change model outputs. These scripts pin every direct dependency to an exact version.
+- **Reproducibility.** ML projects are sensitive to dependency drift. A silent minor-version bump in `transformers`, `torch`, or `numpy` can break compatibility or change model outputs. These scripts pin every direct dependency to an exact version.
 - **Consistent structure.** Every service gets the same layout and the same set of files, so Docker commands, contributor, and developer onboarding work identically across variants.
 - **Idempotency.** Running a script twice is safe — existing files are skipped, not overwritten.
 
 ## Project structure
 
-Each service directory (`backend/`, `library/`, `frontend/`) gets:
+The root directory gets a shared `.env.example` for global secrets (like API keys). Then, each service directory (`backend/`, `library/`, `frontend/`) gets:
 
 - `src/` — Docker's `COPY src/ ./src/` works the same across all services.
 - `.env.example` — documents which variables the service expects, without leaking secrets.
@@ -26,7 +26,7 @@ Each service directory (`backend/`, `library/`, `frontend/`) gets:
 
 ### 1. Create project scaffolding
 
-Creates the variant tree (`vanilla-js/`, `typescript-react/`) and the service skeletons inside each (`backend/`, `library/`, `frontend/`). Drops `.env.example` and `.dockerignore` files appropriate to each service's runtime (Python or Node).
+Creates the variant tree (`vanilla-js/`, `typescript-react/`) and the service skeletons inside each (`backend/`, `library/`, `frontend/`). Creates `.env.example` and `.dockerignore` files appropriate to each service's runtime (Python or Node).
 
 From the project root, run the setup script:
 

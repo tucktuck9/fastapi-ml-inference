@@ -93,29 +93,34 @@ The fastest local path is Docker Compose, which mirrors the multi-service Render
    ./setup.sh
    ```
 
-3. Open `backend/.env` and set `TMDB_API_KEY` to your API key from [themoviedb.org](https://www.themoviedb.org/settings/api) and `HF_TOKEN` to your [Hugging Face token](https://huggingface.co/settings/tokens).
+3. Open the `.env` file at the project root and add your API keys:
 
    ```bash
-   # Required: The Movie Database API key (https://www.themoviedb.org/settings/api)
+   # Required — https://www.themoviedb.org/settings/api
    TMDB_API_KEY=your_tmdb_api_key_here
-   # Recommended: HuggingFace read-only token (https://huggingface.co/settings/tokens)
+
+   # Recommended — anonymous downloads are rate-limited without this
+   # Required if you swap MODEL_ID for a gated model (Llama, etc.)
+   # https://huggingface.co/settings/tokens
    HF_TOKEN=your_readonly_hf_token_here
    ```
 
-4. (Optional) Update the model to another public or gated text-classification model in the **`backend/.env`**:
+4. **Optional:** Swap the default model for any other text-classification model on the [Hugging Face Hub](https://huggingface.co/models?pipeline_tag=text-classification):
 
    ```bash
-   # MODEL_ID accepts any text-classification model on the Hugging Face Hub (https://huggingface.co/models?pipeline_tag=text-classification)
    MODEL_ID=the-hf-org/the-model
-   # MODEL_REVISION accepts a commit SHA from the model's HuggingFace repository
-   MODEL_REVISION=123456EXAMPLE
+   MODEL_REVISION=commit-sha-for-reproducibility
    ```
 
 5. Start every service.
 
-   ```bash
-   docker compose up --build
-   ```
+    ```bash
+    # TypeScript + React
+    docker-compose -f typescript-react/docker-compose.yml up --build
+
+    # Vanilla JS
+    docker-compose -f vanilla-js/docker-compose.yml up --build
+    ```
 
 This starts:
 - The **PostgreSQL 16** service on port `5432`
@@ -130,7 +135,7 @@ Visit [http://localhost:3000](http://localhost:3000) to run emotion inference ag
 
 ### 1. (Optional) Use a different model
 
-To use a different text-classification model on Hugging Face, set the following values in your `render.yaml` for the backend service:
+To use a different text-classification model on Hugging Face, set the following values in the [`typescript-react/render.yaml`](./typescript-react/render.yaml) or [`vanilla-js/render.yaml`](./vanilla-js/render.yaml) for the backend service (`fastapi-ml-inference-backend`):
 
 ```yaml
 envVars:
@@ -141,7 +146,7 @@ envVars:
 ```
 
 ### 2. Deploy to Render
-Add your nearest `region` to the [`render.yaml`](./render.yaml) file located at the root of this project. Click the **Deploy to Render** button at the top of this page. You'll need to:
+Add your nearest `region` in the [`typescript-react/render.yaml`](./typescript-react/render.yaml) or [`vanilla-js/render.yaml`](./vanilla-js/render.yaml). Click the **Deploy to Render** button at the top of this page. You'll need to:
 
 1. Enter a blueprint name
 2. Enter your `TMDB_API_KEY` and `HF_TOKEN` 
