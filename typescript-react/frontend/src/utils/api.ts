@@ -86,6 +86,7 @@ export async function fetchReviewsPage(tmdbId: number, page: number, signal?: Ab
 export async function fetchSavedMovies(): Promise<SavedMovie[]> {
   const resp = await fetch(BACKEND_URL + '/library/movies', {
     headers: { 'X-User-Id': USER_ID },
+    cache: 'no-store', // Bypass browser cache for fresh data (does not affect backend Redis cache)
   });
   if (!resp.ok) return [];
   return resp.json() as Promise<SavedMovie[]>;
@@ -144,7 +145,8 @@ export interface ModelStatus {
  */
 export async function fetchModelStatus(): Promise<ModelStatus | null> {
   try {
-    const resp = await fetch(BACKEND_URL + '/admin/status');
+    // Bypass browser cache for fresh data (does not affect backend Redis cache)
+    const resp = await fetch(BACKEND_URL + '/admin/status', { cache: 'no-store' });
     return resp.json() as Promise<ModelStatus>;
   } catch {
     return null;

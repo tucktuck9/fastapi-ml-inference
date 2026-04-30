@@ -56,7 +56,8 @@ function appendLog(label, payload, ms) {
  */
 async function refreshStatus() {
   try {
-    const resp = await fetch(API_BASE + '/admin/status');
+    // Bypass browser cache for fresh data (does not affect backend Redis cache)
+    const resp = await fetch(API_BASE + '/admin/status', { cache: 'no-store' });
     const data = await resp.json();
     setKV('kv-model-id', data.model_id);
     setKV('kv-loaded', data.loaded, data.loaded ? 'ok' : 'warn');

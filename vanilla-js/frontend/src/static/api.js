@@ -75,6 +75,7 @@ async function fetchReviewsPage(tmdbId, page) {
 async function fetchLibrary() {
   const resp = await fetch(LIBRARY_URL + '/library/movies', {
     headers: { 'X-User-Id': USER_ID },
+    cache: 'no-store', // Bypass browser cache for fresh data (does not affect backend Redis cache)
   });
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));
