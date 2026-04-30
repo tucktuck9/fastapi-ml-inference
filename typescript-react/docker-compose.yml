@@ -1,0 +1,86 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    env_file:
+      - ../.env
+      - ./backend/.env
+    environment:
+      LIBRARY_URL: http://library:8001
+    ports:
+      - "8000:8000"
+    networks:
+      - web_network
+    volumes:
+      - model_cache:/model_cache
+    depends_on:
+      - library
+      - redis
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: library
+      POSTGRES_PASSWORD: library
+      POSTGRES_DB: library
+    ports:
+      - "5432:5432"
+    networks:
+      - web_network
+    volumes:
+      - library_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # Wait until Postgres accepts connections before letting the library
+      # service start; otherwise asyncpg will raise on first request.
+      test: ["CMD-SHELL", "pg_isready -U library -d library"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  library:
+    # Private service: no host port mapping, only `expose:`. The backend reaches it
+    # at http://library:8001 over the compose network. On Render this is a `pserv`
+    # (private service) with no public URL — same trust boundary, different platform.
+    build:
+      context: ./library
+    environment:
+      DATABASE_URL: postgresql://library:library@postgres:5432/library
+      PORT: "8001"
+    expose:
+      - "8001"
+    networks:
+      - web_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  redis:
+    # Optional caching layer: emotion scores are keyed by review_id and stored
+    # for 7 days. The backend degrades gracefully if this container is removed.
+    image: redis:8-alpine
+    expose:
+      - "6379"
+    networks:
+      - web_network
+    volumes:
+      - redis_data:/data
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_BACKEND_URL: http://localhost:8000   # baked into bundle at build time
+    ports:
+      - "3000:80"                                 # nginx on 80 inside container
+    networks:
+      - web_network
+    depends_on:
+      - backend
+
+volumes:
+  model_cache:    # HuggingFace model weights, mirroring the Render persistent disk
+  library_pgdata: # Postgres data for the saved-movies library
+  redis_data:     # Redis RDB snapshot for emotion score cache
+
+networks:
+  web_network:

@@ -35,3 +35,6 @@ coverage
 # Docs / repo metadata
 README.md
 *.md
+
+# Compose file is host-only tooling, not needed in the image
+docker-compose.yml

@@ -5,11 +5,15 @@
 import type { Movie, SavedMovie, SaveMoviePayload, ReviewsSummary, ReviewsPage } from '../types';
 
 /**
- * Backend URL is replaced at build time by Vite from `VITE_BACKEND_URL`.
- * Falls back to localhost for `npm run dev` without a `.env` file.
- * See `.env.example` for the expected value in production.
+ * Backend URL resolution order:
+ *  1. window.__ENV__.BACKEND_URL — injected at container startup by entrypoint.sh
+ *     (production on Render; value comes from the BACKEND_URL env var).
+ *  2. import.meta.env.VITE_BACKEND_URL — Vite build-time substitution
+ *     (local dev via .env file).
+ *  3. localhost fallback for bare `npm run dev` without a .env file.
  */
 const BACKEND_URL: string = (
+  window.__ENV__?.BACKEND_URL ||
   import.meta.env.VITE_BACKEND_URL ||
   'http://localhost:8000'
 ).replace(/\/$/, '');
