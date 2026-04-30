@@ -143,9 +143,7 @@ a:hover { text-decoration: underline; }
 }
 .hero-content { position: relative; z-index: 1; }
 .hero-tagline {
-  color: #fff; font-size: 1.05rem; font-style: italic;
-  text-shadow: 0 2px 8px rgba(0,0,0,0.6);
-  margin: 0 0 8px;
+  display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px;
 }
 
 /* Reaction pills for emotions */
@@ -234,6 +232,10 @@ a:hover { text-decoration: underline; }
 .search-empty-icon { font-size: 3rem; opacity: 0.4; margin-bottom: 12px; }
 .search-empty-hint { font-size: 0.85rem; color: var(--text-faint); margin-top: 8px; }
 .rating-block-wrap { margin-bottom: 8px; }
+.inference-line {
+  color: var(--text-faint); font-size: 0.78rem; margin: 16px 0 8px;
+  font-style: italic;
+}
 .inference-line-mt { margin: 4px 0 0; }
 .wl-search-icon { color: #777; }
 .wl-empty-hint { font-size: 0.85rem; margin-top: 8px; }

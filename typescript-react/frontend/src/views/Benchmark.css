@@ -19,7 +19,6 @@
   line-height: 1.55;
   letter-spacing: 0.01em;
   -webkit-font-smoothing: antialiased;
-  min-height: 100vh;
 }
 
 /* ========================================== */
@@ -109,6 +108,8 @@
 .bm-btn:hover          { border-color: var(--bm-accent); }
 .bm-btn.primary        { border-color: var(--bm-accent); }
 .bm-btn.primary:hover  { background: var(--bm-accent); color: #000; }
+.bm-btn.accent         { border-color: var(--bm-yellow); color: var(--bm-yellow); }
+.bm-btn.accent:hover   { background: var(--bm-yellow); color: #000; }
 .bm-btn:disabled       { opacity: 0.4; cursor: not-allowed; }
 
 .bm-run-summary { color: var(--bm-muted); font-size: 13px; }

@@ -246,12 +246,12 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
             hit the cached snapshot.
           </p>
         </div>
-        <button type="button" className="bm-back" onClick={onBack}>← Back to app</button>
+        <button type="button" className="bm-back" onClick={onBack}>&larr; Back to app</button>
       </div>
 
       <div className="bm-run-row">
         <button type="button" className="bm-btn primary" onClick={() => void predict()} disabled={busy}>
-          ▶&nbsp; Run Inference
+          &#9654;&nbsp; Run Inference
         </button>
         <div className="bm-run-summary">
           <span className="bm-val">{sumModel}</span>
