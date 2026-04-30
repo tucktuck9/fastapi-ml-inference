@@ -1,0 +1,23 @@
+/* App-level layout styles (root shell, view-routing wrapper, global footer). */
+/* Component-specific styles live next to their .tsx file. */
+
+.tmdb-attribution {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 24px 16px 32px;
+  text-align: center;
+}
+
+.tmdb-logo {
+  height: 20px;
+  width: auto;
+  opacity: 0.7;
+}
+
+.tmdb-notice {
+  font-size: 11px;
+  color: var(--text-muted, #888);
+  margin: 0;
+}
