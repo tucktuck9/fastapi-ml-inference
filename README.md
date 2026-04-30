@@ -2,7 +2,7 @@
 
 *Run any open-source text-classification model from Hugging Face as another service in Render, with sub-200 ms steady-state latency and a one-click deploy. A flat monthly instance bill instead of per-token metering, no GPU, and no separate ML platform just for the model.*
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/tucktuck9/hf-inference-app)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/tucktuck9/fastapi-ml-inference)
 
 ## Live demo
 
@@ -26,7 +26,7 @@ A movie discovery app powered by an open-source emotion model. The stack is made
 ## Features
 
 - ⚡ **Quantized CPU inference** — INT8 dynamic quantization roughly halves RAM with negligible accuracy loss, fitting the model on a Pro plan without a GPU.
-- 💾 **Persistent model cache** — a Render [Persistent Disk](https://render.com/docs/disks) mounted at `/model_cache` (with `HF_HOME` set to that path) turns a ~45-second cold start for the model download/load into a ~1.6s warm start for the first prediction.
+- 💾 **Persistent model cache** — a Render [Persistent Disk](https://render.com/docs/disks) mounted at `/model_cache` (with `HF_HOME` set to that path) caches the model weights so they survive redeploys. The model downloads from Hugging Face once on first deploy; every redeploy after that loads it straight from disk and reaches the first prediction in ~1.6s.
 - 🔒 **Private service pattern** — a Render [Private Service](https://render.com/docs/private-services) (`type: pserv`) gives the library service no public URL — all database traffic stays inside Render's private network.
 - 🚦 **Model-ready traffic gating** — a Render [health check](https://render.com/docs/health-checks) path (`/ready`) blocks traffic until the model is fully loaded into memory.
 - 🗄️ **Redis emotion cache** — emotion scores are cached in a managed [Key Value](https://render.com/docs/key-value) instance keyed by `review_id` with a 7-day TTL. Cache hits skip the forward pass entirely. Redis is optional: if `REDIS_URL` is unset, inference runs uncached and the app is otherwise unchanged.
@@ -34,7 +34,7 @@ A movie discovery app powered by an open-source emotion model. The stack is made
 
 ## Project structure
 
-This project ships two interchangeable frontends — pick one and use it throughout. Backend, library, Redis, and Postgres are identical across both; only the frontend differs.
+This project ships two interchangeable frontends — pick one and use it throughout. Backend (API), Library, Redis, and Postgres are identical across both; only the frontend differs.
 
 ```
     fastapi-ml-inference/
@@ -99,8 +99,8 @@ The fastest local path is Docker Compose, which mirrors the multi-service Render
 1. Clone the repo.
 
    ```bash
-   git clone https://github.com/tucktuck9/hf-inference-app.git
-   cd hf-inference-app
+   git clone https://github.com/tucktuck9/fastapi-ml-inference.git
+   cd fastapi-ml-inference
    ```
 
 2. Generate per-service `.env` files from the examples.
@@ -116,7 +116,7 @@ The fastest local path is Docker Compose, which mirrors the multi-service Render
    TMDB_API_KEY=your_tmdb_api_key_here
 
    # Recommended — anonymous downloads are rate-limited without this
-   # Required if you swap MODEL_ID for a gated model (Llama, etc.)
+   # Required if you swap MODEL_ID for a gated model
    # https://huggingface.co/settings/tokens
    HF_TOKEN=your_readonly_hf_token_here
    ```
@@ -128,7 +128,7 @@ The fastest local path is Docker Compose, which mirrors the multi-service Render
    MODEL_REVISION=commit-sha-for-reproducibility
    ```
 
-5. Start every service.
+5. Start every service. Pick a frontend variant — Backend (API), Library, Redis, and Postgres are identical across both.
 
     ```bash
     # Run TypeScript + React frontend
@@ -162,19 +162,30 @@ envVars:
 ```
 
 ### 2. Deploy to Render
-Add your nearest `region` in the [`typescript-react/render.yaml`](./typescript-react/render.yaml) or [`vanilla-js/render.yaml`](./vanilla-js/render.yaml). Click the **Deploy to Render** button at the top of this page. You'll need to:
+
+Add your nearest [`region`](https://render.com/docs/regions) to the [`typescript-react/render.yaml`](./typescript-react/render.yaml) or [`vanilla-js/render.yaml`](./vanilla-js/render.yaml). Click the **Deploy to Render** button at the top of this page. You'll need to:
 
 1. Enter a blueprint name
 2. For **Blueprint Path**, enter either `vanilla-js/render.yaml` or `typescript-react/render.yaml`
-2. Enter your `TMDB_API_KEY` and `HF_TOKEN` 
-3. Click **Deploy Blueprint**
-4. Wait for all services to deploy (Redis, Postgres, Library, API, Frontend)
-5. Access your resources on Render (URLs shown in the Dashboard after deploy):
-   - 🎭 **Movie Vibes UI**: `https://<your-frontend-name>.onrender.com`
-   - 📊 **Inference Benchmark UI**: `https://<your-frontend-name>.onrender.com/benchmark`
-   - 🎬 **Movie Vibes API docs**: `https://<your-backend-name>.onrender.com/docs`
+3. Enter your `TMDB_API_KEY` and `HF_TOKEN`
+4. Click **Deploy Blueprint**
+5. Wait for all services to deploy: Redis, Postgres, Library, Backend (API), and Frontend
 
-## 📡 Usage
+### 3. Access your services
+
+Your URLs appear in the Render Dashboard once the deploy is green:
+
+- 🎭 **Movie Vibes UI**: `https://<your-frontend-name>.onrender.com`
+- 📊 **Inference Benchmark UI**: `https://<your-frontend-name>.onrender.com/benchmark`
+- 🎬 **Movie Vibes API docs**: `https://<your-backend-name>.onrender.com/docs`
+
+> 🎉 **One click, one stack.** The Blueprint provisioned 5 services, a
+> 10 GB persistent disk, managed Redis, and managed Postgres — wired
+> by `fromService` and `fromDatabase`, no secrets copy-pasted. Future
+> redeploys skip the model download entirely and reach the first
+> prediction in ~1.6s.
+
+## Usage
 
 All requests go to the **API** service (`http://localhost:8000` locally, your `*.onrender.com` URL in production).
 
@@ -188,4 +199,4 @@ Once the stack is running, the API is fully documented and explorable in your br
 | **ReDoc** | [localhost:8000/redoc](http://localhost:8000/redoc) | `https://<your-api>.onrender.com/redoc` |
 | **OpenAPI JSON** | [localhost:8000/openapi.json](http://localhost:8000/openapi.json) | `https://<your-api>.onrender.com/openapi.json` |
 
-The schema covers all endpoints — inference, movies, library, admin, and health — with full request and response shapes. Use Swagger UI to try calls directly from the browser, or feed the OpenAPI JSON into [`openapi-typescript`](https://github.com/openapi-ts/openapi-typescript) or [`orval`](https://orval.dev) to generate a typed TypeScript client.
+The schema covers all endpoints with full request and response shapes. Use Swagger UI to try APIs from your browser.
