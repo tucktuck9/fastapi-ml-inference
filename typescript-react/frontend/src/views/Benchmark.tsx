@@ -11,7 +11,7 @@ import { fetchModelStatus, runPredict, runPredictTimed, loadModel, unloadModel }
 import type { ModelStatus, PredictTimed } from '../utils/api';
 import './Benchmark.css';
 
-const INITIAL_TEXT = 'I love how simple this deployment feels.';
+const INITIAL_TEXT = 'This was the best movie of all time.';
 
 const BURST_SIZES = [5, 10, 20] as const;
 

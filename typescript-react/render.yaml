@@ -37,6 +37,8 @@ services:
         sync: false
       - key: HF_TOKEN
         sync: false
+      - key: HF_HOME
+        value: /model_cache
       - key: FRONTEND_URL
         fromService:
           type: web
