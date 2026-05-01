@@ -57,6 +57,12 @@ services:
           type: redis
           name: fastapi-ml-inference-cache
           property: connectionString
+      # Configure a single Uvicorn worker process. This ensures the Benchmark page's
+      # admin controls (load/unload) reliably target the correct model instance in memory.
+      # Inference throughput remains high: the asyncio semaphore (INFERENCE_CONCURRENCY)
+      # efficiently manages concurrent forward passes within this single worker.
+      - key: WEB_CONCURRENCY
+        value: "1"
 
   # Private (pserv) service: no public URL, only reachable over Render's
   # internal network from the backend. The browser cannot hit this directly.
