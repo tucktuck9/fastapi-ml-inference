@@ -171,6 +171,12 @@ Add your nearest [`region`](https://render.com/docs/regions) to the [`typescript
 4. Click **Deploy Blueprint**
 5. Wait for all services to deploy: Redis, Postgres, Library, Backend (API), and Frontend
 
+> 🎉 **One click, one stack.** The Blueprint provisioned 5 services, a
+> 10 GB persistent disk, managed Redis, and managed Postgres — wired
+> by `fromService` and `fromDatabase`, no secrets copy-pasted. Future
+> redeploys skip the model download entirely and reach the first
+> prediction in ~1.6s.
+
 ### 3. Access your services
 
 Your URLs appear in the Render Dashboard once the deploy is green:
@@ -183,12 +189,6 @@ Your URLs appear in the Render Dashboard once the deploy is green:
 
 3. 🎬 **Backend API Docs**: `https://<your-backend-name>.onrender.com/docs`  
    The interactive Swagger UI: explore the backend endpoints, test the `/predict` API directly, and view schemas.
-
-> 🎉 **One click, one stack.** The Blueprint provisioned 5 services, a
-> 10 GB persistent disk, managed Redis, and managed Postgres — wired
-> by `fromService` and `fromDatabase`, no secrets copy-pasted. Future
-> redeploys skip the model download entirely and reach the first
-> prediction in ~1.6s.
 
 ## Usage
 
