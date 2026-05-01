@@ -1,4 +1,4 @@
-# fastapi-ml-inference
+# FastAPI ML Inference
 
 *Run any open-source text-classification model from Hugging Face as another service in Render, with sub-200 ms steady-state latency and a one-click deploy. A flat monthly instance bill instead of per-token metering, no GPU, and no separate ML platform just for the model.*
 
