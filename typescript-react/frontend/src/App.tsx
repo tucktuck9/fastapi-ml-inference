@@ -47,6 +47,15 @@ export default function App(): JSX.Element {
     document.body.setAttribute('data-view', view);
   }, [view]);
 
+  // Handle browser back/forward buttons
+  useEffect(() => {
+    const handlePopState = () => {
+      setView(_initialView());
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   /**
    * Show a temporary toast message.
    * @param message - The message to display.
@@ -73,6 +82,12 @@ export default function App(): JSX.Element {
   const navigateTo = useCallback((viewName: View): void => {
     setView(viewName);
     window.scrollTo({ top: 0, behavior: 'instant' });
+    
+    // Update the URL so browser history and refreshes work correctly
+    const newPath = viewName === 'benchmark' ? '/benchmark' : '/';
+    if (window.location.pathname !== newPath) {
+      window.history.pushState({}, '', newPath);
+    }
   }, []);
 
   /**
