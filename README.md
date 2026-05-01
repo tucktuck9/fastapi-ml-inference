@@ -6,9 +6,9 @@
 
 ## Live demo
 
-- 🎭 [Movie Vibes UI](https://render-ml-inference-frontend.onrender.com) 
-- 📊 [Inference Benchmark UI](https://render-ml-inference-frontend.onrender.com/benchmark) 
-- 🎬 [Movie Vibes API docs](https://render-ml-inference-backend.onrender.com/docs)
+- 🎭 [Movie Vibes UI](https://fastapi-ml-inference-frontend-3xhq.onrender.com/) 
+- 📊 [Inference Benchmark UI](https://fastapi-ml-inference-frontend-3xhq.onrender.com/benchmark) 
+- 🎬 [Movie Vibes API docs](https://fastapi-ml-inference-backend-namw.onrender.com/docs)
 
 ## What you'll build
 
