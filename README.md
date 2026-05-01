@@ -175,9 +175,14 @@ Add your nearest [`region`](https://render.com/docs/regions) to the [`typescript
 
 Your URLs appear in the Render Dashboard once the deploy is green:
 
-- 🎭 **Movie Vibes UI**: `https://<your-frontend-name>.onrender.com`
-- 📊 **Inference Benchmark UI**: `https://<your-frontend-name>.onrender.com/benchmark`
-- 🎬 **Movie Vibes API docs**: `https://<your-backend-name>.onrender.com/docs`
+1. 🎭 **Movie Vibes UI**: `https://<your-frontend-name>.onrender.com` 
+   The main application: search movies, read reviews, and see ML emotion classification in action.
+
+2. 📊 **Inference Benchmark UI**: `https://<your-frontend-name>.onrender.com/benchmark`  
+   The performance dashboard: test raw inference latency, run burst load tests, and manage the model lifecycle.
+
+3. 🎬 **Backend API Docs**: `https://<your-backend-name>.onrender.com/docs`  
+   The interactive Swagger UI: explore the backend endpoints, test the `/predict` API directly, and view schemas.
 
 > 🎉 **One click, one stack.** The Blueprint provisioned 5 services, a
 > 10 GB persistent disk, managed Redis, and managed Postgres — wired
