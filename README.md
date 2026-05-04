@@ -12,25 +12,25 @@
 
 ## What you'll build
 
-A movie discovery app powered by an open-source emotion model. The stack is made up of:
-- a public **backend** web service that loads the emotion model into memory
-- a 10 GB **persistent disk** so model weights survive redeploys without re-downloading
-- a public **frontend** web service that serves the "Movie Vibes" and inference benchmarking UIs
-- a **private movie library** service that owns all database access
-- a managed **Redis** instance that caches emotion scores
-- a managed **Postgres** database instance 
+A movie discovery app that scores the emotional tone of movie reviews using an open-source text-classification model. The stack is made up of:
+- a public **frontend** web service with the "Movie Vibes" demo and inference benchmark UIs
+- a public **backend** web service to run CPU emotion inference and serve /docs
+- a 10 GB **persistent disk** to cache model weights across redeploys
+- a private movie **library** service to manage movie watchlists
+- a **key-value** store to cache movie review emotion predictions
+- a **Postgres** database to store movie watchlists
 
 > [!NOTE]
-> Out-of-domain inputs occasionally surface emotions that don't match a movie's actual tone. In production, you'd fine-tune the model on your text corpus.
+> Out-of-domain inputs can produce emotions that don't match a movie's actual tone. In production, fine-tune the model on your text corpus.
 
 ## Features
 
-- ⚡ **Quantized CPU inference** — INT8 dynamic quantization roughly halves RAM with negligible accuracy loss, fitting the model on a Pro plan without a GPU.
-- 💾 **Persistent model cache** — a Render [Persistent Disk](https://render.com/docs/disks) mounted at `/model_cache` (with `HF_HOME` set to that path) caches the model weights so they survive redeploys. The model downloads from Hugging Face once on first deploy; every redeploy after that loads it straight from disk and reaches the first prediction in ~1.6s.
-- 🔒 **Private service pattern** — a Render [Private Service](https://render.com/docs/private-services) (`type: pserv`) gives the library service no public URL — all database traffic stays inside Render's private network.
-- 🚦 **Model-ready traffic gating** — a Render [health check](https://render.com/docs/health-checks) path (`/ready`) blocks traffic until the model is fully loaded into memory.
-- 🗄️ **Redis emotion cache** — emotion scores are cached in a managed [Key Value](https://render.com/docs/key-value) instance keyed by `review_id` with a 7-day TTL. Cache hits skip the forward pass entirely. Redis is optional: if `REDIS_URL` is unset, inference runs uncached and the app is otherwise unchanged.
-- 🔗 **Infrastructure as Code** — Render's [Blueprint spec](https://render.com/docs/blueprint-spec) `fromService`, `fromDatabase`, and the new Redis `connectionString` inject every inter-service URL at deploy time, so no secrets are copy-pasted between dashboards.
+- ⚡ **Warm web service startup** — Eager model loading and model warmup pay PyTorch's first-inference overhead during startup, so the first user request lands warm.
+- 💾 **Persistent model cache** — `HF_HOME=/model_cache` keeps model weights on a [persistent disk](https://render.com/docs/disks), so cold starts read "locally" instead of downloading.
+- 🚦 **Model-aware readiness** — A [health check](https://render.com/docs/health-checks) pointed at `/ready` only passes after the model is loaded, preventing traffic from hitting cold-starting instances.
+- 🧵 **CPU-safe concurrency** — An `asyncio` semaphore limits in-flight inference so burst traffic queues predictably instead of overloading CPUs.
+- ⚙️ **Quantized CPU inference** — Dynamic INT8 quantization reduces RAM usage and CPU work per prediction, helping the model run on a smaller [web service](https://render.com/docs/web-services).
+- 🗄️ **Inference cache** — Repeated predictions skip the model and return from the [key-value](https://render.com/docs/key-value) store in milliseconds.
 
 ## Project structure
 
