@@ -103,11 +103,32 @@ async function refreshStatus() {
 
     currentState = data.ready ? 'Ready' : (data.loaded ? 'Loaded' : 'Unloaded');
     updateStatusUI(currentState);
+    return data;
   } catch (err) {
     console.error("Error fetching status:", err);
     currentState = 'Unreachable';
     updateStatusUI(currentState);
+    return null;
   }
+}
+
+/**
+ * Manually refresh the model status from the backend and log the result.
+ */
+async function manualRefresh() {
+  const btn = document.getElementById('btn-refresh');
+  if (btn) btn.textContent = 'Refreshing...';
+  isBusy = true;
+  updateStatusUI(currentState);
+  
+  const data = await refreshStatus();
+  if (data) {
+    appendLog('GET /admin/status', data);
+  }
+  
+  isBusy = false;
+  updateStatusUI(currentState);
+  if (btn) btn.textContent = 'Refresh Status';
 }
 
 // ------------------------------------------ //

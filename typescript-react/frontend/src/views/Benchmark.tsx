@@ -80,6 +80,8 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
   const [running, setRunning]       = useState(false);
   const [burstRunning, setBurstRunning] = useState(false);
 
+  const [refreshing, setRefreshing] = useState(false);
+
   // ------------------------------------------ //
   //             API ACTIONS                    //
   // ------------------------------------------ //
@@ -91,12 +93,25 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
     setLogEntries(prev => [entry, ...prev]);
   }, []);
 
-  const refreshStatus = useCallback(async (): Promise<void> => {
+  const refreshStatus = useCallback(async (): Promise<ModelStatus | null> => {
     const data = await fetchModelStatus();
-    if (!data) { setSumState('Unreachable'); return; }
+    if (!data) { setSumState('Unreachable'); return null; }
     setKvStatus(data);
     setSumState(data.ready ? 'Ready' : (data.loaded ? 'Loaded' : 'Unloaded'));
+    return data;
   }, []);
+
+  const manualRefresh = useCallback(async (): Promise<void> => {
+    setRefreshing(true);
+    try {
+      const data = await refreshStatus();
+      if (data) {
+        _appendLog('GET /admin/status', data);
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshStatus, _appendLog]);
 
   const predict = useCallback(async (): Promise<void> => {
     setRunning(true);
@@ -166,7 +181,7 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
 
   useEffect(() => { void refreshStatus(); }, [refreshStatus]);
 
-  const busy = running || burstRunning;
+  const busy = running || burstRunning || refreshing;
 
   // ------------------------------------------ //
   //             RENDER                         //
@@ -240,8 +255,8 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
                 {sumState === 'Unloading' ? 'Unloading...' : 'Unload Model'}
               </button>
             )}
-            <button type="button" className="bm-btn" onClick={() => void refreshStatus()} disabled={busy}>
-              Refresh Status
+            <button type="button" className="bm-btn" onClick={() => void manualRefresh()} disabled={busy}>
+              {refreshing ? 'Refreshing...' : 'Refresh Status'}
             </button>
           </div>
 
