@@ -1,5 +1,6 @@
 fastapi==0.136.1
 uvicorn[standard]==0.46.0
+gunicorn==26.0.0
 transformers==5.6.2
 sentencepiece==0.2.1
 httpx==0.28.1
