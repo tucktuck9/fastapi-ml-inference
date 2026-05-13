@@ -52,12 +52,19 @@ class InferenceBusy(Exception):
 async def _acquire() -> None:
     """Acquire the semaphore, raising InferenceBusy if the wait budget expires."""
     if _inflight >= INFERENCE_CONCURRENCY:
-        logger.warning(
-            "[gate] at capacity — %d/%d slots in use; waiting up to %d ms",
-            _inflight,
-            INFERENCE_CONCURRENCY,
-            INFERENCE_QUEUE_TIMEOUT_MS,
-        )
+        if INFERENCE_QUEUE_TIMEOUT_MS > 0:
+            logger.warning(
+                "[gate] at capacity — %d/%d slots in use; waiting up to %d ms",
+                _inflight,
+                INFERENCE_CONCURRENCY,
+                INFERENCE_QUEUE_TIMEOUT_MS,
+            )
+        else:
+            logger.warning(
+                "[gate] at capacity — %d/%d slots in use; waiting",
+                _inflight,
+                INFERENCE_CONCURRENCY,
+            )
 
     if INFERENCE_QUEUE_TIMEOUT_MS > 0:
         try:
