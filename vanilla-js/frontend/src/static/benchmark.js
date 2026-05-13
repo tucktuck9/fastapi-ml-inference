@@ -4,6 +4,9 @@
 
 const API_BASE = window.ENV.BACKEND_URL;
 
+let currentState = 'Unknown';
+let isBusy = false;
+
 // ------------------------------------------ //
 //             UI HELPERS                     //
 // ------------------------------------------ //
@@ -44,6 +47,37 @@ function appendLog(label, payload, ms) {
 //             API ACTIONS                    //
 // ------------------------------------------ //
 
+function updateStatusUI(state) {
+  document.getElementById('sum-state').textContent = state;
+  document.getElementById('sum-dot').className = 'status-dot ' + state.toLowerCase();
+  
+  const toggleBtn = document.getElementById('btn-toggle-model');
+  if (toggleBtn) {
+    if (state === 'Loading' || state === 'Unloading' || isBusy) {
+      toggleBtn.disabled = true;
+      toggleBtn.textContent = state === 'Loading' ? 'Loading...' : (state === 'Unloading' ? 'Unloading...' : toggleBtn.textContent);
+    } else {
+      toggleBtn.disabled = false;
+      if (state === 'Unloaded' || state === 'Unreachable' || state === 'Unknown') {
+        toggleBtn.textContent = 'Load Model';
+        toggleBtn.onclick = loadModel;
+      } else {
+        toggleBtn.textContent = 'Unload Model';
+        toggleBtn.onclick = unloadModel;
+      }
+    }
+  }
+  
+  const refreshBtn = document.getElementById('btn-refresh');
+  if (refreshBtn) refreshBtn.disabled = isBusy;
+  
+  const predictBtn = document.getElementById('btn-predict');
+  if (predictBtn) predictBtn.disabled = isBusy;
+  
+  const burstBtns = document.querySelectorAll('.btn-burst');
+  burstBtns.forEach(btn => btn.disabled = isBusy);
+}
+
 /**
  * Refresh the model status from the backend.
  * 
@@ -67,13 +101,12 @@ async function refreshStatus() {
     setKV('kv-last', data.last_used_at);
     setKV('kv-hfhome', data.hf_home);
 
-    const state = data.ready ? 'Ready' : (data.loaded ? 'Loaded' : 'Unloaded');
-    document.getElementById('sum-state').textContent = state;
-    document.getElementById('sum-dot').className = 'status-dot ' + state.toLowerCase();
+    currentState = data.ready ? 'Ready' : (data.loaded ? 'Loaded' : 'Unloaded');
+    updateStatusUI(currentState);
   } catch (err) {
     console.error("Error fetching status:", err);
-    document.getElementById('sum-state').textContent = 'Unreachable';
-    document.getElementById('sum-dot').className = 'status-dot unreachable';
+    currentState = 'Unreachable';
+    updateStatusUI(currentState);
   }
 }
 
@@ -133,6 +166,8 @@ async function singlePredict(text) {
  * @returns {Promise<void>}
  */
 async function runBurst(n) {
+  isBusy = true;
+  updateStatusUI(currentState);
   const text = document.getElementById('text').value;
   const t0 = performance.now();
   const results = await Promise.all(Array.from({ length: n }, () => singlePredict(text)));
@@ -200,6 +235,7 @@ async function runBurst(n) {
   document.getElementById('bp-breakdown').innerHTML = breakdownHtml;
 
   appendLog(`POST /predict ×${n} (burst)`, { p50, p95, p99, rps: +rps, cache_hits: hits }, Math.round(elapsed_ms));
+  isBusy = false;
   await refreshStatus();
 }
 
@@ -219,11 +255,14 @@ async function runBurst(n) {
  * @returns {Promise<void>}
  */
 async function predict() {
+  isBusy = true;
+  updateStatusUI(currentState);
   const text = document.getElementById('text').value;
   const { wall_ms, data, cache_hit } = await singlePredict(text);
   const label = cache_hit ? 'POST /predict [CACHE HIT]' : 'POST /predict';
   document.getElementById('sum-latency').textContent = wall_ms + ' ms' + (cache_hit ? ' ⚡ cached' : '');
   appendLog(label, data, wall_ms);
+  isBusy = false;
   await refreshStatus();
 }
 
@@ -232,6 +271,10 @@ async function predict() {
  * @returns {Promise<void>}
  */
 async function loadModel() {
+  currentState = 'Loading';
+  updateStatusUI(currentState);
+  document.getElementById('sum-latency').textContent = '— ms';
+
   const resp = await fetch(API_BASE + '/admin/load', { method: 'POST' });
   const data = await resp.json();
   appendLog('POST /admin/load', data);
@@ -243,6 +286,10 @@ async function loadModel() {
  * @returns {Promise<void>}
  */
 async function unloadModel() {
+  currentState = 'Unloading';
+  updateStatusUI(currentState);
+  document.getElementById('sum-latency').textContent = '— ms';
+
   const resp = await fetch(API_BASE + '/admin/unload', { method: 'POST' });
   const data = await resp.json();
   appendLog('POST /admin/unload', data);

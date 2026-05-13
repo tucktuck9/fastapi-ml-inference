@@ -130,8 +130,21 @@
     .status-dot.ready { background: #4ade80; }
     .status-dot.loaded { background: var(--yellow); }
     .status-dot.unloaded { background: var(--muted); }
+    .status-dot.loading, .status-dot.unloading { background: #60a5fa; }
     .status-dot.unreachable { background: #f87171; }
     .status-dot.unknown { background: var(--border-strong); }
+
+    .icon-btn {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 4px;
+      opacity: 0.7;
+      transition: opacity 0.2s;
+    }
+    .icon-btn:hover { opacity: 1; }
+    .icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
     /* ========================================== */
     /*           GRID LAYOUT                      */
@@ -244,7 +257,7 @@
       <textarea id="text">This was the best movie of all time.</textarea>
       
       <div class="run-row" style="margin-top: 14px;">
-        <button class="btn primary" onclick="predict()">&#9654;&nbsp; Run Inference</button>
+        <button class="btn primary" id="btn-predict" onclick="predict()">&#9654;&nbsp; Run Inference</button>
         <div class="run-summary">
           <span class="val">Status: <span id="sum-dot" class="status-dot unknown"></span><span id="sum-state">Unknown</span></span>
           <span class="arrow">|</span>
@@ -252,9 +265,9 @@
         </div>
         <div class="burst-controls">
           <span class="lbl">Concurrent Requests:</span>
-          <button class="btn" onclick="runBurst(5)">5&times;</button>
-          <button class="btn" onclick="runBurst(10)">10&times;</button>
-          <button class="btn" onclick="runBurst(20)">20&times;</button>
+          <button class="btn btn-burst" onclick="runBurst(5)">5&times;</button>
+          <button class="btn btn-burst" onclick="runBurst(10)">10&times;</button>
+          <button class="btn btn-burst" onclick="runBurst(20)">20&times;</button>
         </div>
       </div>
     </div>
@@ -273,12 +286,13 @@
       <!--           RIGHT PANEL                      -->
       <!-- ========================================== -->
       <div class="panel">
-        <h2>Status Preview</h2>
+        <h2 style="display: flex; justify-content: space-between; align-items: center;">
+          Status Preview
+          <button class="icon-btn" onclick="refreshStatus()" title="Refresh Status" id="btn-refresh">🔄</button>
+        </h2>
 
         <div class="controls" style="margin-top: 0; margin-bottom: 24px;">
-          <button class="btn" onclick="loadModel()">Load Model</button>
-          <button class="btn" onclick="unloadModel()">Unload Model</button>
-          <button class="btn" onclick="refreshStatus()">Refresh Status</button>
+          <button class="btn" id="btn-toggle-model" onclick="loadModel()">Load Model</button>
         </div>
 
         <div class="panel-section-label" style="margin-top: 0;">Model</div>

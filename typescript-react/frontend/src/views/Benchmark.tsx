@@ -214,12 +214,16 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
   }, [text, _appendLog, refreshStatus]);
 
   const _loadModel = useCallback(async (): Promise<void> => {
+    setSumState('Loading');
+    setSumLatency('— ms');
     const data = await loadModel();
     _appendLog('POST /admin/load', data);
     await refreshStatus();
   }, [_appendLog, refreshStatus]);
 
   const _unloadModel = useCallback(async (): Promise<void> => {
+    setSumState('Unloading');
+    setSumLatency('— ms');
     const data = await unloadModel();
     _appendLog('POST /admin/unload', data);
     await refreshStatus();
@@ -289,12 +293,23 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
         </div>
 
         <div className="bm-panel">
-          <h2 className="bm-panel-h2">Status Preview</h2>
+          <h2 className="bm-panel-h2" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            Status Preview
+            <button type="button" onClick={() => void refreshStatus()} className="bm-icon-btn" title="Refresh Status" disabled={busy}>
+              🔄
+            </button>
+          </h2>
 
           <div className="bm-controls" style={{ marginTop: 0, marginBottom: '24px' }}>
-            <button type="button" className="bm-btn" onClick={() => void _loadModel()}>Load Model</button>
-            <button type="button" className="bm-btn" onClick={() => void _unloadModel()}>Unload Model</button>
-            <button type="button" className="bm-btn" onClick={() => void refreshStatus()}>Refresh Status</button>
+            {sumState === 'Unloaded' || sumState === 'Unreachable' || sumState === 'Unknown' || sumState === 'Loading' ? (
+              <button type="button" className="bm-btn" onClick={() => void _loadModel()} disabled={busy || sumState === 'Loading'}>
+                {sumState === 'Loading' ? 'Loading...' : 'Load Model'}
+              </button>
+            ) : (
+              <button type="button" className="bm-btn" onClick={() => void _unloadModel()} disabled={busy || sumState === 'Unloading'}>
+                {sumState === 'Unloading' ? 'Unloading...' : 'Unload Model'}
+              </button>
+            )}
           </div>
 
           <div className="bm-section-label" style={{ marginTop: 0 }}>Model</div>

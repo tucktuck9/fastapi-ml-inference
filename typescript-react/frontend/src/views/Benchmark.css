@@ -120,8 +120,21 @@
 .bm-status-dot.ready { background: #4ade80; }
 .bm-status-dot.loaded { background: var(--bm-yellow); }
 .bm-status-dot.unloaded { background: var(--bm-muted); }
+.bm-status-dot.loading, .bm-status-dot.unloading { background: #60a5fa; }
 .bm-status-dot.unreachable { background: #f87171; }
 .bm-status-dot.unknown { background: var(--bm-border-strong); }
+
+.bm-icon-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+.bm-icon-btn:hover { opacity: 1; }
+.bm-icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
 /* ========================================== */
 /*           GRID LAYOUT                      */
