@@ -67,10 +67,13 @@ async function refreshStatus() {
     setKV('kv-last', data.last_used_at);
     setKV('kv-hfhome', data.hf_home);
 
-    document.getElementById('sum-model').textContent = data.model_id || '—';
-    document.getElementById('sum-state').textContent = data.ready ? 'ready' : (data.loaded ? 'loaded' : 'unloaded');
+    const state = data.ready ? 'Ready' : (data.loaded ? 'Loaded' : 'Unloaded');
+    document.getElementById('sum-state').textContent = state;
+    document.getElementById('sum-dot').className = 'status-dot ' + state.toLowerCase();
   } catch (err) {
-    document.getElementById('sum-state').textContent = 'unreachable';
+    console.error("Error fetching status:", err);
+    document.getElementById('sum-state').textContent = 'Unreachable';
+    document.getElementById('sum-dot').className = 'status-dot unreachable';
   }
 }
 

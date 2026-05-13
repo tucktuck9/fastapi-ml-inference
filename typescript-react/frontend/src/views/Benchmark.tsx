@@ -152,8 +152,7 @@ interface BenchmarkPageProps {
 export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Element {
   const [text, setText]             = useState(INITIAL_TEXT);
   const [logEntries, setLogEntries] = useState<string[]>([]);
-  const [sumModel, setSumModel]     = useState('—');
-  const [sumState, setSumState]     = useState('unknown');
+  const [sumState, setSumState]     = useState('Unknown');
   const [sumLatency, setSumLatency] = useState('— ms');
   const [kvStatus, setKvStatus]     = useState<ModelStatus>({});
   const [running, setRunning]       = useState(false);
@@ -173,10 +172,9 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
 
   const refreshStatus = useCallback(async (): Promise<void> => {
     const data = await fetchModelStatus();
-    if (!data) { setSumState('unreachable'); return; }
+    if (!data) { setSumState('Unreachable'); return; }
     setKvStatus(data);
-    setSumModel(data.model_id ?? '—');
-    setSumState(data.ready ? 'ready' : (data.loaded ? 'loaded' : 'unloaded'));
+    setSumState(data.ready ? 'Ready' : (data.loaded ? 'Loaded' : 'Unloaded'));
   }, []);
 
   const predict = useCallback(async (): Promise<void> => {
@@ -250,24 +248,30 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
         <button type="button" className="bm-back" onClick={onBack}>&larr; Back to app</button>
       </div>
 
-      <div className="bm-run-row">
-        <button type="button" className="bm-btn primary" onClick={() => void predict()} disabled={busy}>
-          &#9654;&nbsp; Run Inference
-        </button>
-        <div className="bm-run-summary">
-          <span className="bm-val">{sumModel}</span>
-          <span className="bm-arrow"> → </span>
-          <span className="bm-val">{sumState}</span>
-          <span className="bm-arrow"> → </span>
-          <span className="bm-val">{sumLatency}</span>
-        </div>
-        <div className="bm-burst-controls">
-          <span className="bm-burst-lbl">Burst:</span>
-          {BURST_SIZES.map(n => (
-            <button type="button" key={n} className="bm-btn" onClick={() => void runBurst(n)} disabled={busy}>
-              {n}&times;
-            </button>
-          ))}
+      <div className="bm-input-section">
+        <div className="bm-section-label" style={{ marginTop: 0 }}>Test Input</div>
+        <textarea
+          className="bm-textarea"
+          value={text}
+          onChange={e => setText(e.target.value)}
+        />
+        <div className="bm-run-row" style={{ marginTop: '14px' }}>
+          <button type="button" className="bm-btn primary" onClick={() => void predict()} disabled={busy}>
+            &#9654;&nbsp; Run Inference
+          </button>
+          <div className="bm-run-summary">
+            <span className="bm-val">Status: <span className={`bm-status-dot ${sumState.toLowerCase()}`} />{sumState}</span>
+            <span className="bm-arrow"> | </span>
+            <span className="bm-val">Latency: {sumLatency}</span>
+          </div>
+          <div className="bm-burst-controls">
+            <span className="bm-burst-lbl">Concurrent Requests:</span>
+            {BURST_SIZES.map(n => (
+              <button type="button" key={n} className="bm-btn" onClick={() => void runBurst(n)} disabled={busy}>
+                {n}&times;
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -275,20 +279,6 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
 
         <div className="bm-panel">
           <h2 className="bm-panel-h2">Event Log</h2>
-
-          <div className="bm-section-label">Input</div>
-          <textarea
-            className="bm-textarea"
-            value={text}
-            onChange={e => setText(e.target.value)}
-          />
-          <div className="bm-controls">
-            <button type="button" className="bm-btn" onClick={() => void _loadModel()}>Load Model</button>
-            <button type="button" className="bm-btn" onClick={() => void _unloadModel()}>Unload Model</button>
-            <button type="button" className="bm-btn" onClick={() => void refreshStatus()}>Refresh Status</button>
-          </div>
-
-          <div className="bm-section-label bm-response-label">Response</div>
           <div className="bm-log">
             {logEntries.length === 0
               ? <span className="bm-empty">&gt; Waiting for first request...</span>
@@ -301,7 +291,13 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
         <div className="bm-panel">
           <h2 className="bm-panel-h2">Status Preview</h2>
 
-          <div className="bm-section-label">Model</div>
+          <div className="bm-controls" style={{ marginTop: 0, marginBottom: '24px' }}>
+            <button type="button" className="bm-btn" onClick={() => void _loadModel()}>Load Model</button>
+            <button type="button" className="bm-btn" onClick={() => void _unloadModel()}>Unload Model</button>
+            <button type="button" className="bm-btn" onClick={() => void refreshStatus()}>Refresh Status</button>
+          </div>
+
+          <div className="bm-section-label" style={{ marginTop: 0 }}>Model</div>
           <div className="bm-status-grid">
             <div className="bm-kv-card">
               <div className="bm-kv-title">Identity</div>

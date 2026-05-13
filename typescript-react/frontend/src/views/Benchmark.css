@@ -116,6 +116,13 @@
 .bm-arrow       { color: var(--bm-border-strong); margin: 0 8px; }
 .bm-val         { color: var(--bm-text); }
 
+.bm-status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+.bm-status-dot.ready { background: #4ade80; }
+.bm-status-dot.loaded { background: var(--bm-yellow); }
+.bm-status-dot.unloaded { background: var(--bm-muted); }
+.bm-status-dot.unreachable { background: #f87171; }
+.bm-status-dot.unknown { background: var(--bm-border-strong); }
+
 /* ========================================== */
 /*           GRID LAYOUT                      */
 /* ========================================== */

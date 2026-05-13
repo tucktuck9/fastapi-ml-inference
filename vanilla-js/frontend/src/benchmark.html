@@ -126,6 +126,13 @@
     .breakdown-row .br-bar.model { background: var(--yellow); }
     .breakdown-row .br-pct { color: var(--muted); font-size: 11px; text-align: right; }
 
+    .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+    .status-dot.ready { background: #4ade80; }
+    .status-dot.loaded { background: var(--yellow); }
+    .status-dot.unloaded { background: var(--muted); }
+    .status-dot.unreachable { background: #f87171; }
+    .status-dot.unknown { background: var(--border-strong); }
+
     /* ========================================== */
     /*           GRID LAYOUT                      */
     /* ========================================== */
@@ -232,20 +239,23 @@
       <a class="howto" href="../" >&larr; Back to app</a>
     </div>
 
-    <div class="run-row">
-      <button class="btn primary" onclick="predict()">&#9654;&nbsp; Run Inference</button>
-      <div class="run-summary">
-        <span class="val" id="sum-model">—</span>
-        <span class="arrow">&rarr;</span>
-        <span class="val" id="sum-state">unknown</span>
-        <span class="arrow">&rarr;</span>
-        <span class="val" id="sum-latency">— ms</span>
-      </div>
-      <div class="burst-controls">
-        <span class="lbl">Burst:</span>
-        <button class="btn" onclick="runBurst(5)">5&times;</button>
-        <button class="btn" onclick="runBurst(10)">10&times;</button>
-        <button class="btn" onclick="runBurst(20)">20&times;</button>
+    <div class="input-section">
+      <div class="panel-section-label" style="margin-top: 0;">Test Input</div>
+      <textarea id="text">This was the best movie of all time.</textarea>
+      
+      <div class="run-row" style="margin-top: 14px;">
+        <button class="btn primary" onclick="predict()">&#9654;&nbsp; Run Inference</button>
+        <div class="run-summary">
+          <span class="val">Status: <span id="sum-dot" class="status-dot unknown"></span><span id="sum-state">Unknown</span></span>
+          <span class="arrow">|</span>
+          <span class="val">Latency: <span id="sum-latency">— ms</span></span>
+        </div>
+        <div class="burst-controls">
+          <span class="lbl">Concurrent Requests:</span>
+          <button class="btn" onclick="runBurst(5)">5&times;</button>
+          <button class="btn" onclick="runBurst(10)">10&times;</button>
+          <button class="btn" onclick="runBurst(20)">20&times;</button>
+        </div>
       </div>
     </div>
 
@@ -256,16 +266,6 @@
       <!-- ========================================== -->
       <div class="panel">
         <h2>Event Log</h2>
-
-        <div class="panel-section-label">Input</div>
-        <textarea id="text">This was the best movie of all time.</textarea>
-        <div class="controls">
-          <button class="btn" onclick="loadModel()">Load Model</button>
-          <button class="btn" onclick="unloadModel()">Unload Model</button>
-          <button class="btn" onclick="refreshStatus()">Refresh Status</button>
-        </div>
-
-        <div class="panel-section-label" style="margin-top: 24px;">Response</div>
         <div id="output" class="log"><span class="empty">&gt; Waiting for first request...</span></div>
       </div>
 
@@ -275,7 +275,13 @@
       <div class="panel">
         <h2>Status Preview</h2>
 
-        <div class="panel-section-label">Model</div>
+        <div class="controls" style="margin-top: 0; margin-bottom: 24px;">
+          <button class="btn" onclick="loadModel()">Load Model</button>
+          <button class="btn" onclick="unloadModel()">Unload Model</button>
+          <button class="btn" onclick="refreshStatus()">Refresh Status</button>
+        </div>
+
+        <div class="panel-section-label" style="margin-top: 0;">Model</div>
         <div class="status-grid">
           <div class="kv-card">
             <div class="kv-title">Identity</div>
