@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { JSX } from 'react';
 import { fetchModelStatus, runPredict, runPredictTimed, loadModel, unloadModel } from '../utils/api';
-import type { ModelStatus, PredictTimed } from '../utils/api';
+import type { ModelStatus } from '../utils/api';
 import './Benchmark.css';
 
 const INITIAL_TEXT = 'This was the best movie of all time.';
@@ -30,16 +30,6 @@ function percentile(sorted: number[], p: number): number {
 //             TYPES                          //
 // ------------------------------------------ //
 
-interface BurstResult {
-  n: number;
-  p50: number; p95: number; p99: number;
-  min: number; max: number;
-  rps: string;
-  totalMs: number;
-  cacheHits: number;
-  median: PredictTimed;
-}
-
 // ------------------------------------------ //
 //             SUB-COMPONENTS                 //
 // ------------------------------------------ //
@@ -58,74 +48,6 @@ function KvRow({ label, value, status }: KvRowProps): JSX.Element {
     <div className="bm-kv-row">
       <span className="bm-kv-k">{label}:</span>
       <span className={cls}>{isEmpty ? '—' : String(value)}</span>
-    </div>
-  );
-}
-
-interface BurstPanelProps { result: BurstResult; }
-
-/** Renders p50/p95/p99 stats, throughput, cache hit rate, and a latency breakdown bar chart. */
-function BurstPanel({ result }: BurstPanelProps): JSX.Element {
-  const { n, p50, p95, p99, min, max, rps, totalMs, cacheHits, median } = result;
-  const net_ms      = Math.max(0, median.wall_ms - median.server_ms);
-  const overhead_ms = Math.max(0, median.server_ms - median.inference_ms);
-  const total       = median.wall_ms;
-
-  const breakdownRows = median.cache_hit
-    ? [{ label: 'Network + Redis (no inference)', ms: total,                          model: true  }]
-    : [
-        { label: 'Model forward pass',   ms: Math.round(median.inference_ms), model: true  },
-        { label: 'Server overhead',      ms: Math.round(overhead_ms),         model: false },
-        { label: 'Network (round-trip)', ms: Math.round(net_ms),              model: false },
-      ];
-
-  return (
-    <div className="bm-burst-panel">
-      <h2 className="bm-panel-h2">Burst Results — {n} concurrent requests</h2>
-      <div className="bm-burst-grid">
-
-        <div>
-          <div className="bm-section-label">Wall-clock latency</div>
-          {([['p50', p50], ['p95', p95], ['p99', p99], ['min', min], ['max', max]] as const).map(([k, v]) => (
-            <div key={k} className="bm-stat-row">
-              <span className="bm-stat-k">{k}</span>
-              <span className="bm-stat-v">{v} ms</span>
-            </div>
-          ))}
-        </div>
-
-        <div>
-          <div className="bm-section-label">Throughput</div>
-          <div className="bm-stat-row"><span className="bm-stat-k">requests/sec</span><span className="bm-stat-v">{rps}</span></div>
-          <div className="bm-stat-row"><span className="bm-stat-k">total time</span><span className="bm-stat-v">{totalMs} ms</span></div>
-          <div className="bm-section-label bm-section-label--mt">Cache</div>
-          <div className="bm-stat-row"><span className="bm-stat-k">hits / total</span><span className="bm-stat-v bm-stat-v--hit">{cacheHits} / {n}</span></div>
-          <div className="bm-stat-row"><span className="bm-stat-k">hit rate</span><span className="bm-stat-v bm-stat-v--hit">{((cacheHits / n) * 100).toFixed(0)}%</span></div>
-        </div>
-
-        <div>
-          <div className="bm-section-label">Latency breakdown — median request</div>
-          {breakdownRows.map(({ label, ms, model }) => {
-            const pct = total > 0 ? Math.min(100, Math.round((ms / total) * 100)) : 0;
-            return (
-              <div key={label} className="bm-breakdown-row">
-                <span className="bm-br-label">{label}</span>
-                <span className="bm-br-val">{ms} ms</span>
-                <div className="bm-br-bar-wrap">
-                  <div className={`bm-br-bar${model ? ' bm-br-bar--model' : ''}`} style={{ width: `${pct}%` }} />
-                </div>
-                <span className="bm-br-pct">{pct}%</span>
-              </div>
-            );
-          })}
-          <div className="bm-breakdown-row bm-breakdown-row--total">
-            <span className="bm-br-label bm-br-label--total">Total</span>
-            <span className="bm-br-val bm-br-val--total">{total} ms</span>
-            <div /><div />
-          </div>
-        </div>
-
-      </div>
     </div>
   );
 }
@@ -152,13 +74,13 @@ interface BenchmarkPageProps {
 export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Element {
   const [text, setText]             = useState(INITIAL_TEXT);
   const [logEntries, setLogEntries] = useState<string[]>([]);
-  const [sumModel, setSumModel]     = useState('—');
-  const [sumState, setSumState]     = useState('unknown');
+  const [sumState, setSumState]     = useState('Unknown');
   const [sumLatency, setSumLatency] = useState('— ms');
   const [kvStatus, setKvStatus]     = useState<ModelStatus>({});
   const [running, setRunning]       = useState(false);
   const [burstRunning, setBurstRunning] = useState(false);
-  const [burstResult, setBurstResult]   = useState<BurstResult | null>(null);
+
+  const [refreshing, setRefreshing] = useState(false);
 
   // ------------------------------------------ //
   //             API ACTIONS                    //
@@ -171,21 +93,49 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
     setLogEntries(prev => [entry, ...prev]);
   }, []);
 
-  const refreshStatus = useCallback(async (): Promise<void> => {
+  const refreshStatus = useCallback(async (): Promise<ModelStatus | null> => {
     const data = await fetchModelStatus();
-    if (!data) { setSumState('unreachable'); return; }
+    if (!data) { setSumState('Unreachable'); return null; }
     setKvStatus(data);
-    setSumModel(data.model_id ?? '—');
-    setSumState(data.ready ? 'ready' : (data.loaded ? 'loaded' : 'unloaded'));
+    setSumState(data.ready ? 'Ready' : (data.loaded ? 'Loaded' : 'Unloaded'));
+    return data;
   }, []);
+
+  const manualRefresh = useCallback(async (): Promise<void> => {
+    setRefreshing(true);
+    try {
+      const data = await refreshStatus();
+      if (data) {
+        _appendLog('GET /admin/status', data);
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshStatus, _appendLog]);
 
   const predict = useCallback(async (): Promise<void> => {
     setRunning(true);
     try {
       const { data, ms, cache_hit } = await runPredict(text);
+      
+      const server_ms = (data as any).latency_ms ?? 0;
+      const inference_ms = (data as any).result?.inference_ms ?? 0;
+      const net_ms = Math.max(0, ms - server_ms);
+      const overhead_ms = Math.max(0, server_ms - inference_ms);
+      
+      const breakdown = cache_hit 
+        ? { network_and_redis_ms: ms }
+        : {
+            model_forward_pass_ms: Math.round(inference_ms),
+            server_overhead_ms: Math.round(overhead_ms),
+            network_round_trip_ms: Math.round(net_ms)
+          };
+          
+      const payloadToLog = { ...(data as any), breakdown };
+
       const label = cache_hit ? 'POST /predict [CACHE HIT]' : 'POST /predict';
       setSumLatency(ms + ' ms' + (cache_hit ? ' ⚡ cached' : ''));
-      _appendLog(label, data, ms);
+      _appendLog(label, payloadToLog, ms);
       await refreshStatus();
     } finally {
       setRunning(false);
@@ -205,9 +155,7 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
       const p99   = percentile(walls, 99);
       const rps   = (n / (elapsed / 1000)).toFixed(1);
       const hits  = results.filter(r => r.cache_hit).length;
-      const median = results.find(r => r.wall_ms === p50) ?? results[Math.floor(results.length / 2)];
 
-      setBurstResult({ n, p50, p95, p99, min: walls[0], max: walls[walls.length - 1], rps, totalMs: Math.round(elapsed), cacheHits: hits, median });
       _appendLog(`POST /predict ×${n} (burst)`, { p50, p95, p99, rps: +rps, cache_hits: hits }, Math.round(elapsed));
       await refreshStatus();
     } finally {
@@ -216,20 +164,38 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
   }, [text, _appendLog, refreshStatus]);
 
   const _loadModel = useCallback(async (): Promise<void> => {
+    setSumState('Loading');
+    setSumLatency('— ms');
     const data = await loadModel();
     _appendLog('POST /admin/load', data);
     await refreshStatus();
   }, [_appendLog, refreshStatus]);
 
   const _unloadModel = useCallback(async (): Promise<void> => {
+    setSumState('Unloading');
+    setSumLatency('— ms');
     const data = await unloadModel();
     _appendLog('POST /admin/unload', data);
     await refreshStatus();
   }, [_appendLog, refreshStatus]);
 
-  useEffect(() => { void refreshStatus(); }, [refreshStatus]);
+  useEffect(() => {
+    void refreshStatus();
+    
+    // Poll every 3 seconds if unreachable (e.g. backend is still starting up)
+    const interval = setInterval(() => {
+      setSumState(current => {
+        if (current === 'Unreachable') {
+          void refreshStatus();
+        }
+        return current;
+      });
+    }, 3000);
+    
+    return () => clearInterval(interval);
+  }, [refreshStatus]);
 
-  const busy = running || burstRunning;
+  const busy = running || burstRunning || refreshing;
 
   // ------------------------------------------ //
   //             RENDER                         //
@@ -250,24 +216,30 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
         <button type="button" className="bm-back" onClick={onBack}>&larr; Back to app</button>
       </div>
 
-      <div className="bm-run-row">
-        <button type="button" className="bm-btn primary" onClick={() => void predict()} disabled={busy}>
-          &#9654;&nbsp; Run Inference
-        </button>
-        <div className="bm-run-summary">
-          <span className="bm-val">{sumModel}</span>
-          <span className="bm-arrow"> → </span>
-          <span className="bm-val">{sumState}</span>
-          <span className="bm-arrow"> → </span>
-          <span className="bm-val">{sumLatency}</span>
-        </div>
-        <div className="bm-burst-controls">
-          <span className="bm-burst-lbl">Burst:</span>
-          {BURST_SIZES.map(n => (
-            <button type="button" key={n} className="bm-btn" onClick={() => void runBurst(n)} disabled={busy}>
-              {n}&times;
-            </button>
-          ))}
+      <div className="bm-input-section">
+        <div className="bm-section-label" style={{ marginTop: 0 }}>Test Input</div>
+        <textarea
+          className="bm-textarea"
+          value={text}
+          onChange={e => setText(e.target.value)}
+        />
+        <div className="bm-run-row" style={{ marginTop: '14px' }}>
+          <button type="button" className="bm-btn primary" onClick={() => void predict()} disabled={busy}>
+            &#9654;&nbsp; Run Inference
+          </button>
+          <div className="bm-run-summary">
+            <span className="bm-val">Status: <span className={`bm-status-dot ${sumState.toLowerCase()}`} />{sumState}</span>
+            <span className="bm-arrow"> | </span>
+            <span className="bm-val">Latency: {sumLatency}</span>
+          </div>
+          <div className="bm-burst-controls">
+            <span className="bm-burst-lbl">Concurrent Requests:</span>
+            {BURST_SIZES.map(n => (
+              <button type="button" key={n} className="bm-btn" onClick={() => void runBurst(n)} disabled={busy}>
+                {n}&times;
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -275,20 +247,6 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
 
         <div className="bm-panel">
           <h2 className="bm-panel-h2">Event Log</h2>
-
-          <div className="bm-section-label">Input</div>
-          <textarea
-            className="bm-textarea"
-            value={text}
-            onChange={e => setText(e.target.value)}
-          />
-          <div className="bm-controls">
-            <button type="button" className="bm-btn" onClick={() => void _loadModel()}>Load Model</button>
-            <button type="button" className="bm-btn" onClick={() => void _unloadModel()}>Unload Model</button>
-            <button type="button" className="bm-btn" onClick={() => void refreshStatus()}>Refresh Status</button>
-          </div>
-
-          <div className="bm-section-label bm-response-label">Response</div>
           <div className="bm-log">
             {logEntries.length === 0
               ? <span className="bm-empty">&gt; Waiting for first request...</span>
@@ -301,7 +259,22 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
         <div className="bm-panel">
           <h2 className="bm-panel-h2">Status Preview</h2>
 
-          <div className="bm-section-label">Model</div>
+          <div className="bm-controls" style={{ marginTop: 0, marginBottom: '24px' }}>
+            {sumState === 'Unloaded' || sumState === 'Unreachable' || sumState === 'Unknown' || sumState === 'Loading' ? (
+              <button type="button" className="bm-btn" onClick={() => void _loadModel()} disabled={busy || sumState === 'Loading'}>
+                {sumState === 'Loading' ? 'Loading...' : 'Load Model'}
+              </button>
+            ) : (
+              <button type="button" className="bm-btn" onClick={() => void _unloadModel()} disabled={busy || sumState === 'Unloading'}>
+                {sumState === 'Unloading' ? 'Unloading...' : 'Unload Model'}
+              </button>
+            )}
+            <button type="button" className="bm-btn" onClick={() => void manualRefresh()} disabled={busy}>
+              {refreshing ? 'Refreshing...' : 'Refresh Status'}
+            </button>
+          </div>
+
+          <div className="bm-section-label" style={{ marginTop: 0 }}>Model</div>
           <div className="bm-status-grid">
             <div className="bm-kv-card">
               <div className="bm-kv-title">Identity</div>
@@ -327,8 +300,6 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
         </div>
 
       </div>
-
-      {burstResult !== null && <BurstPanel result={burstResult} />}
 
     </div>
   );

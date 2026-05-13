@@ -99,32 +99,25 @@
     .burst-controls { display: flex; align-items: center; gap: 8px; margin-left: auto; }
     .burst-controls .lbl { color: var(--muted); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; }
 
-    /* ========================================== */
-    /*           BURST RESULTS PANEL              */
-    /* ========================================== */
-    .burst-panel { margin-top: 24px; border: 1px solid var(--border); padding: 24px; display: none; }
-    .burst-panel.visible { display: block; }
-    .burst-panel h2 {
-      font-size: 13px; font-weight: 700; letter-spacing: 0.18em;
-      text-transform: uppercase; margin: 0 0 20px; padding-bottom: 14px;
-      border-bottom: 1px solid var(--border); color: var(--accent);
+    .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+    .status-dot.ready { background: #4ade80; }
+    .status-dot.loaded { background: var(--yellow); }
+    .status-dot.unloaded { background: var(--muted); }
+    .status-dot.loading, .status-dot.unloading { background: #60a5fa; }
+    .status-dot.unreachable { background: #f87171; }
+    .status-dot.unknown { background: var(--border-strong); }
+
+    .icon-btn {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 4px;
+      opacity: 0.7;
+      transition: opacity 0.2s;
     }
-    .burst-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; }
-    @media (max-width: 900px) { .burst-grid { grid-template-columns: 1fr 1fr; } }
-    @media (max-width: 540px) { .burst-grid { grid-template-columns: 1fr; } }
-
-    .stat-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border); }
-    .stat-row .k { color: var(--muted); }
-    .stat-row .v { color: var(--text); font-weight: 500; }
-    .stat-row .v.hit { color: var(--yellow); }
-
-    .breakdown-row { display: grid; grid-template-columns: 160px 60px 1fr 40px; gap: 8px; align-items: center; padding: 5px 0; }
-    .breakdown-row .br-label { color: var(--muted); font-size: 11px; letter-spacing: 0.08em; }
-    .breakdown-row .br-val { color: var(--text); text-align: right; }
-    .breakdown-row .br-bar-wrap { height: 5px; background: var(--border); }
-    .breakdown-row .br-bar { height: 100%; background: var(--accent); }
-    .breakdown-row .br-bar.model { background: var(--yellow); }
-    .breakdown-row .br-pct { color: var(--muted); font-size: 11px; text-align: right; }
+    .icon-btn:hover { opacity: 1; }
+    .icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
     /* ========================================== */
     /*           GRID LAYOUT                      */
@@ -232,20 +225,23 @@
       <a class="howto" href="../" >&larr; Back to app</a>
     </div>
 
-    <div class="run-row">
-      <button class="btn primary" onclick="predict()">&#9654;&nbsp; Run Inference</button>
-      <div class="run-summary">
-        <span class="val" id="sum-model">—</span>
-        <span class="arrow">&rarr;</span>
-        <span class="val" id="sum-state">unknown</span>
-        <span class="arrow">&rarr;</span>
-        <span class="val" id="sum-latency">— ms</span>
-      </div>
-      <div class="burst-controls">
-        <span class="lbl">Burst:</span>
-        <button class="btn" onclick="runBurst(5)">5&times;</button>
-        <button class="btn" onclick="runBurst(10)">10&times;</button>
-        <button class="btn" onclick="runBurst(20)">20&times;</button>
+    <div class="input-section">
+      <div class="panel-section-label" style="margin-top: 0;">Test Input</div>
+      <textarea id="text">This was the best movie of all time.</textarea>
+      
+      <div class="run-row" style="margin-top: 14px;">
+        <button class="btn primary" id="btn-predict" onclick="predict()">&#9654;&nbsp; Run Inference</button>
+        <div class="run-summary">
+          <span class="val">Status: <span id="sum-dot" class="status-dot unknown"></span><span id="sum-state">Unknown</span></span>
+          <span class="arrow">|</span>
+          <span class="val">Latency: <span id="sum-latency">— ms</span></span>
+        </div>
+        <div class="burst-controls">
+          <span class="lbl">Concurrent Requests:</span>
+          <button class="btn btn-burst" onclick="runBurst(5)">5&times;</button>
+          <button class="btn btn-burst" onclick="runBurst(10)">10&times;</button>
+          <button class="btn btn-burst" onclick="runBurst(20)">20&times;</button>
+        </div>
       </div>
     </div>
 
@@ -256,16 +252,6 @@
       <!-- ========================================== -->
       <div class="panel">
         <h2>Event Log</h2>
-
-        <div class="panel-section-label">Input</div>
-        <textarea id="text">This was the best movie of all time.</textarea>
-        <div class="controls">
-          <button class="btn" onclick="loadModel()">Load Model</button>
-          <button class="btn" onclick="unloadModel()">Unload Model</button>
-          <button class="btn" onclick="refreshStatus()">Refresh Status</button>
-        </div>
-
-        <div class="panel-section-label" style="margin-top: 24px;">Response</div>
         <div id="output" class="log"><span class="empty">&gt; Waiting for first request...</span></div>
       </div>
 
@@ -275,7 +261,12 @@
       <div class="panel">
         <h2>Status Preview</h2>
 
-        <div class="panel-section-label">Model</div>
+        <div class="controls" style="margin-top: 0; margin-bottom: 24px;">
+          <button class="btn" id="btn-toggle-model" onclick="loadModel()">Load Model</button>
+          <button class="btn" id="btn-refresh" onclick="manualRefresh()">Refresh Status</button>
+        </div>
+
+        <div class="panel-section-label" style="margin-top: 0;">Model</div>
         <div class="status-grid">
           <div class="kv-card">
             <div class="kv-title">Identity</div>
@@ -297,36 +288,6 @@
             <div class="kv-title">Cache</div>
             <div class="kv-row"><span class="k">hf_home:</span><span class="v placeholder" id="kv-hfhome">&mdash;</span></div>
           </div>
-        </div>
-
-      </div>
-    </div>
-
-    <div id="burst-panel" class="burst-panel">
-      <h2>Burst Results — <span id="burst-label">—</span></h2>
-      <div class="burst-grid">
-
-        <div>
-          <div class="panel-section-label">Wall-clock latency</div>
-          <div class="stat-row"><span class="k">p50</span><span class="v" id="bp-p50">—</span></div>
-          <div class="stat-row"><span class="k">p95</span><span class="v" id="bp-p95">—</span></div>
-          <div class="stat-row"><span class="k">p99</span><span class="v" id="bp-p99">—</span></div>
-          <div class="stat-row"><span class="k">min</span><span class="v" id="bp-min">—</span></div>
-          <div class="stat-row"><span class="k">max</span><span class="v" id="bp-max">—</span></div>
-        </div>
-
-        <div>
-          <div class="panel-section-label">Throughput</div>
-          <div class="stat-row"><span class="k">requests/sec</span><span class="v" id="bp-rps">—</span></div>
-          <div class="stat-row"><span class="k">total time</span><span class="v" id="bp-total">—</span></div>
-          <div class="panel-section-label" style="margin-top:18px;">Cache</div>
-          <div class="stat-row"><span class="k">hits / total</span><span class="v hit" id="bp-cache">—</span></div>
-          <div class="stat-row"><span class="k">hit rate</span><span class="v hit" id="bp-hitrate">—</span></div>
-        </div>
-
-        <div>
-          <div class="panel-section-label">Latency breakdown — median request</div>
-          <div id="bp-breakdown"></div>
         </div>
 
       </div>

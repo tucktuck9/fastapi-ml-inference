@@ -4,6 +4,9 @@
 
 const API_BASE = window.ENV.BACKEND_URL;
 
+let currentState = 'Unknown';
+let isBusy = false;
+
 // ------------------------------------------ //
 //             UI HELPERS                     //
 // ------------------------------------------ //
@@ -44,6 +47,37 @@ function appendLog(label, payload, ms) {
 //             API ACTIONS                    //
 // ------------------------------------------ //
 
+function updateStatusUI(state) {
+  document.getElementById('sum-state').textContent = state;
+  document.getElementById('sum-dot').className = 'status-dot ' + state.toLowerCase();
+  
+  const toggleBtn = document.getElementById('btn-toggle-model');
+  if (toggleBtn) {
+    if (state === 'Loading' || state === 'Unloading' || isBusy) {
+      toggleBtn.disabled = true;
+      toggleBtn.textContent = state === 'Loading' ? 'Loading...' : (state === 'Unloading' ? 'Unloading...' : toggleBtn.textContent);
+    } else {
+      toggleBtn.disabled = false;
+      if (state === 'Unloaded' || state === 'Unreachable' || state === 'Unknown') {
+        toggleBtn.textContent = 'Load Model';
+        toggleBtn.onclick = loadModel;
+      } else {
+        toggleBtn.textContent = 'Unload Model';
+        toggleBtn.onclick = unloadModel;
+      }
+    }
+  }
+  
+  const refreshBtn = document.getElementById('btn-refresh');
+  if (refreshBtn) refreshBtn.disabled = isBusy;
+  
+  const predictBtn = document.getElementById('btn-predict');
+  if (predictBtn) predictBtn.disabled = isBusy;
+  
+  const burstBtns = document.querySelectorAll('.btn-burst');
+  burstBtns.forEach(btn => btn.disabled = isBusy);
+}
+
 /**
  * Refresh the model status from the backend.
  * 
@@ -67,11 +101,34 @@ async function refreshStatus() {
     setKV('kv-last', data.last_used_at);
     setKV('kv-hfhome', data.hf_home);
 
-    document.getElementById('sum-model').textContent = data.model_id || '—';
-    document.getElementById('sum-state').textContent = data.ready ? 'ready' : (data.loaded ? 'loaded' : 'unloaded');
+    currentState = data.ready ? 'Ready' : (data.loaded ? 'Loaded' : 'Unloaded');
+    updateStatusUI(currentState);
+    return data;
   } catch (err) {
-    document.getElementById('sum-state').textContent = 'unreachable';
+    console.error("Error fetching status:", err);
+    currentState = 'Unreachable';
+    updateStatusUI(currentState);
+    return null;
   }
+}
+
+/**
+ * Manually refresh the model status from the backend and log the result.
+ */
+async function manualRefresh() {
+  const btn = document.getElementById('btn-refresh');
+  if (btn) btn.textContent = 'Refreshing...';
+  isBusy = true;
+  updateStatusUI(currentState);
+  
+  const data = await refreshStatus();
+  if (data) {
+    appendLog('GET /admin/status', data);
+  }
+  
+  isBusy = false;
+  updateStatusUI(currentState);
+  if (btn) btn.textContent = 'Refresh Status';
 }
 
 // ------------------------------------------ //
@@ -104,10 +161,26 @@ async function singlePredict(text) {
   });
   const data = await resp.json();
   const wall_ms = Math.round(performance.now() - t0);
+  
+  const server_ms = data.latency_ms ?? 0;
+  const inference_ms = data.result?.inference_ms ?? 0;
+  const net_ms = Math.max(0, wall_ms - server_ms);
+  const overhead_ms = Math.max(0, server_ms - inference_ms);
+  
+  if (data.cache_hit) {
+    data.breakdown = { network_and_redis_ms: wall_ms };
+  } else {
+    data.breakdown = {
+      model_forward_pass_ms: Math.round(inference_ms),
+      server_overhead_ms: Math.round(overhead_ms),
+      network_round_trip_ms: Math.round(net_ms)
+    };
+  }
+
   return {
     wall_ms,
-    server_ms: data.latency_ms ?? 0,
-    inference_ms: data.result?.inference_ms ?? 0,
+    server_ms,
+    inference_ms,
     cache_hit: data.cache_hit ?? false,
     data,
   };
@@ -130,6 +203,8 @@ async function singlePredict(text) {
  * @returns {Promise<void>}
  */
 async function runBurst(n) {
+  isBusy = true;
+  updateStatusUI(currentState);
   const text = document.getElementById('text').value;
   const t0 = performance.now();
   const results = await Promise.all(Array.from({ length: n }, () => singlePredict(text)));
@@ -143,60 +218,8 @@ async function runBurst(n) {
   const rps = (n / (elapsed_ms / 1000)).toFixed(1);
   const hits = results.filter(r => r.cache_hit).length;
 
-  // Median request breakdown
-  const median = results.find(r => r.wall_ms === p50) ?? results[Math.floor(results.length / 2)];
-  const net_ms = Math.max(0, median.wall_ms - median.server_ms);
-  const overhead_ms = Math.max(0, median.server_ms - median.inference_ms);
-  const total = median.wall_ms;
-
-  // Update burst panel
-  const panel = document.getElementById('burst-panel');
-  panel.classList.add('visible');
-  document.getElementById('burst-label').textContent = `${n} concurrent requests`;
-  document.getElementById('bp-p50').textContent = p50 + ' ms';
-  document.getElementById('bp-p95').textContent = p95 + ' ms';
-  document.getElementById('bp-p99').textContent = p99 + ' ms';
-  document.getElementById('bp-min').textContent = walls[0] + ' ms';
-  document.getElementById('bp-max').textContent = walls[walls.length - 1] + ' ms';
-  document.getElementById('bp-rps').textContent = rps;
-  document.getElementById('bp-total').textContent = Math.round(elapsed_ms) + ' ms';
-  document.getElementById('bp-cache').textContent = `${hits} / ${n}`;
-  document.getElementById('bp-hitrate').textContent = ((hits / n) * 100).toFixed(0) + '%';
-
-  // Breakdown bars — cache hits have no model forward pass; show Redis lookup instead.
-  const totalRow = `<div class="breakdown-row" style="border-top:1px solid var(--border-strong);margin-top:4px;padding-top:6px;">
-    <span class="br-label" style="color:var(--text)">Total</span>
-    <span class="br-val" style="color:var(--text)">${total} ms</span>
-    <div></div><div></div>
-  </div>`;
-
-  let breakdownHtml;
-  if (median.cache_hit) {
-    breakdownHtml = `<div class="breakdown-row">
-      <span class="br-label">Network + Redis (no inference)</span>
-      <span class="br-val">${total} ms</span>
-      <div class="br-bar-wrap"><div class="br-bar model" style="width:100%"></div></div>
-      <span class="br-pct">100%</span>
-    </div>` + totalRow;
-  } else {
-    const rows = [
-      { label: 'Model forward pass',  ms: Math.round(median.inference_ms), cls: 'model' },
-      { label: 'Server overhead',     ms: Math.round(overhead_ms),          cls: '' },
-      { label: 'Network (round-trip)',ms: Math.round(net_ms),               cls: '' },
-    ];
-    breakdownHtml = rows.map(r => {
-      const pct = total > 0 ? Math.min(100, Math.round((r.ms / total) * 100)) : 0;
-      return `<div class="breakdown-row">
-        <span class="br-label">${r.label}</span>
-        <span class="br-val">${r.ms} ms</span>
-        <div class="br-bar-wrap"><div class="br-bar ${r.cls}" style="width:${pct}%"></div></div>
-        <span class="br-pct">${pct}%</span>
-      </div>`;
-    }).join('') + totalRow;
-  }
-  document.getElementById('bp-breakdown').innerHTML = breakdownHtml;
-
   appendLog(`POST /predict ×${n} (burst)`, { p50, p95, p99, rps: +rps, cache_hits: hits }, Math.round(elapsed_ms));
+  isBusy = false;
   await refreshStatus();
 }
 
@@ -216,11 +239,14 @@ async function runBurst(n) {
  * @returns {Promise<void>}
  */
 async function predict() {
+  isBusy = true;
+  updateStatusUI(currentState);
   const text = document.getElementById('text').value;
   const { wall_ms, data, cache_hit } = await singlePredict(text);
   const label = cache_hit ? 'POST /predict [CACHE HIT]' : 'POST /predict';
   document.getElementById('sum-latency').textContent = wall_ms + ' ms' + (cache_hit ? ' ⚡ cached' : '');
   appendLog(label, data, wall_ms);
+  isBusy = false;
   await refreshStatus();
 }
 
@@ -229,6 +255,10 @@ async function predict() {
  * @returns {Promise<void>}
  */
 async function loadModel() {
+  currentState = 'Loading';
+  updateStatusUI(currentState);
+  document.getElementById('sum-latency').textContent = '— ms';
+
   const resp = await fetch(API_BASE + '/admin/load', { method: 'POST' });
   const data = await resp.json();
   appendLog('POST /admin/load', data);
@@ -240,6 +270,10 @@ async function loadModel() {
  * @returns {Promise<void>}
  */
 async function unloadModel() {
+  currentState = 'Unloading';
+  updateStatusUI(currentState);
+  document.getElementById('sum-latency').textContent = '— ms';
+
   const resp = await fetch(API_BASE + '/admin/unload', { method: 'POST' });
   const data = await resp.json();
   appendLog('POST /admin/unload', data);
@@ -250,4 +284,15 @@ async function unloadModel() {
 //             INITIALIZATION                 //
 // ------------------------------------------ //
 
-refreshStatus();
+async function init() {
+  await refreshStatus();
+  
+  // Poll every 3 seconds if unreachable (e.g. backend is still starting up)
+  setInterval(async () => {
+    if (currentState === 'Unreachable' && !isBusy) {
+      await refreshStatus();
+    }
+  }, 3000);
+}
+
+init();

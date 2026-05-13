@@ -23,8 +23,8 @@ services:
       POSTGRES_USER: library
       POSTGRES_PASSWORD: library
       POSTGRES_DB: library
-    ports:
-      - "5432:5432"
+    expose:
+      - "5432"
     networks:
       - web_network
     volumes:
