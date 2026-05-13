@@ -288,6 +288,7 @@
 
 .bm-burst-panel {
   margin-top: 24px;
+  margin-bottom: 24px;
   border: 1px solid var(--bm-border);
   padding: 24px;
 }

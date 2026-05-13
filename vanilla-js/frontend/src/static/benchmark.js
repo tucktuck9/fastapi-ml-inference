@@ -140,10 +140,26 @@ async function singlePredict(text) {
   });
   const data = await resp.json();
   const wall_ms = Math.round(performance.now() - t0);
+  
+  const server_ms = data.latency_ms ?? 0;
+  const inference_ms = data.result?.inference_ms ?? 0;
+  const net_ms = Math.max(0, wall_ms - server_ms);
+  const overhead_ms = Math.max(0, server_ms - inference_ms);
+  
+  if (data.cache_hit) {
+    data.breakdown = { network_and_redis_ms: wall_ms };
+  } else {
+    data.breakdown = {
+      model_forward_pass_ms: Math.round(inference_ms),
+      server_overhead_ms: Math.round(overhead_ms),
+      network_round_trip_ms: Math.round(net_ms)
+    };
+  }
+
   return {
     wall_ms,
-    server_ms: data.latency_ms ?? 0,
-    inference_ms: data.result?.inference_ms ?? 0,
+    server_ms,
+    inference_ms,
     cache_hit: data.cache_hit ?? false,
     data,
   };
@@ -257,6 +273,7 @@ async function runBurst(n) {
 async function predict() {
   isBusy = true;
   updateStatusUI(currentState);
+  document.getElementById('burst-panel').classList.remove('visible');
   const text = document.getElementById('text').value;
   const { wall_ms, data, cache_hit } = await singlePredict(text);
   const label = cache_hit ? 'POST /predict [CACHE HIT]' : 'POST /predict';
