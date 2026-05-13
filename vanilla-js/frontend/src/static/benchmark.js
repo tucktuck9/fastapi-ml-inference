@@ -197,59 +197,6 @@ async function runBurst(n) {
   const rps = (n / (elapsed_ms / 1000)).toFixed(1);
   const hits = results.filter(r => r.cache_hit).length;
 
-  // Median request breakdown
-  const median = results.find(r => r.wall_ms === p50) ?? results[Math.floor(results.length / 2)];
-  const net_ms = Math.max(0, median.wall_ms - median.server_ms);
-  const overhead_ms = Math.max(0, median.server_ms - median.inference_ms);
-  const total = median.wall_ms;
-
-  // Update burst panel
-  const panel = document.getElementById('burst-panel');
-  panel.classList.add('visible');
-  document.getElementById('burst-label').textContent = `${n} concurrent requests`;
-  document.getElementById('bp-p50').textContent = p50 + ' ms';
-  document.getElementById('bp-p95').textContent = p95 + ' ms';
-  document.getElementById('bp-p99').textContent = p99 + ' ms';
-  document.getElementById('bp-min').textContent = walls[0] + ' ms';
-  document.getElementById('bp-max').textContent = walls[walls.length - 1] + ' ms';
-  document.getElementById('bp-rps').textContent = rps;
-  document.getElementById('bp-total').textContent = Math.round(elapsed_ms) + ' ms';
-  document.getElementById('bp-cache').textContent = `${hits} / ${n}`;
-  document.getElementById('bp-hitrate').textContent = ((hits / n) * 100).toFixed(0) + '%';
-
-  // Breakdown bars — cache hits have no model forward pass; show Redis lookup instead.
-  const totalRow = `<div class="breakdown-row" style="border-top:1px solid var(--border-strong);margin-top:4px;padding-top:6px;">
-    <span class="br-label" style="color:var(--text)">Total</span>
-    <span class="br-val" style="color:var(--text)">${total} ms</span>
-    <div></div><div></div>
-  </div>`;
-
-  let breakdownHtml;
-  if (median.cache_hit) {
-    breakdownHtml = `<div class="breakdown-row">
-      <span class="br-label">Network + Redis (no inference)</span>
-      <span class="br-val">${total} ms</span>
-      <div class="br-bar-wrap"><div class="br-bar model" style="width:100%"></div></div>
-      <span class="br-pct">100%</span>
-    </div>` + totalRow;
-  } else {
-    const rows = [
-      { label: 'Model forward pass',  ms: Math.round(median.inference_ms), cls: 'model' },
-      { label: 'Server overhead',     ms: Math.round(overhead_ms),          cls: '' },
-      { label: 'Network (round-trip)',ms: Math.round(net_ms),               cls: '' },
-    ];
-    breakdownHtml = rows.map(r => {
-      const pct = total > 0 ? Math.min(100, Math.round((r.ms / total) * 100)) : 0;
-      return `<div class="breakdown-row">
-        <span class="br-label">${r.label}</span>
-        <span class="br-val">${r.ms} ms</span>
-        <div class="br-bar-wrap"><div class="br-bar ${r.cls}" style="width:${pct}%"></div></div>
-        <span class="br-pct">${pct}%</span>
-      </div>`;
-    }).join('') + totalRow;
-  }
-  document.getElementById('bp-breakdown').innerHTML = breakdownHtml;
-
   appendLog(`POST /predict ×${n} (burst)`, { p50, p95, p99, rps: +rps, cache_hits: hits }, Math.round(elapsed_ms));
   isBusy = false;
   await refreshStatus();
@@ -273,7 +220,6 @@ async function runBurst(n) {
 async function predict() {
   isBusy = true;
   updateStatusUI(currentState);
-  document.getElementById('burst-panel').classList.remove('visible');
   const text = document.getElementById('text').value;
   const { wall_ms, data, cache_hit } = await singlePredict(text);
   const label = cache_hit ? 'POST /predict [CACHE HIT]' : 'POST /predict';

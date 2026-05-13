@@ -99,33 +99,6 @@
     .burst-controls { display: flex; align-items: center; gap: 8px; margin-left: auto; }
     .burst-controls .lbl { color: var(--muted); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; }
 
-    /* ========================================== */
-    /*           BURST RESULTS PANEL              */
-    /* ========================================== */
-    .burst-panel { margin-top: 24px; margin-bottom: 24px; border: 1px solid var(--border); padding: 24px; display: none; }
-    .burst-panel.visible { display: block; }
-    .burst-panel h2 {
-      font-size: 13px; font-weight: 700; letter-spacing: 0.18em;
-      text-transform: uppercase; margin: 0 0 20px; padding-bottom: 14px;
-      border-bottom: 1px solid var(--border); color: var(--accent);
-    }
-    .burst-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; }
-    @media (max-width: 900px) { .burst-grid { grid-template-columns: 1fr 1fr; } }
-    @media (max-width: 540px) { .burst-grid { grid-template-columns: 1fr; } }
-
-    .stat-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border); }
-    .stat-row .k { color: var(--muted); }
-    .stat-row .v { color: var(--text); font-weight: 500; }
-    .stat-row .v.hit { color: var(--yellow); }
-
-    .breakdown-row { display: grid; grid-template-columns: 160px 60px 1fr 40px; gap: 8px; align-items: center; padding: 5px 0; }
-    .breakdown-row .br-label { color: var(--muted); font-size: 11px; letter-spacing: 0.08em; }
-    .breakdown-row .br-val { color: var(--text); text-align: right; }
-    .breakdown-row .br-bar-wrap { height: 5px; background: var(--border); }
-    .breakdown-row .br-bar { height: 100%; background: var(--accent); }
-    .breakdown-row .br-bar.model { background: var(--yellow); }
-    .breakdown-row .br-pct { color: var(--muted); font-size: 11px; text-align: right; }
-
     .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
     .status-dot.ready { background: #4ade80; }
     .status-dot.loaded { background: var(--yellow); }
@@ -269,36 +242,6 @@
           <button class="btn btn-burst" onclick="runBurst(10)">10&times;</button>
           <button class="btn btn-burst" onclick="runBurst(20)">20&times;</button>
         </div>
-      </div>
-    </div>
-
-    <div id="burst-panel" class="burst-panel">
-      <h2>Burst Results — <span id="burst-label">—</span></h2>
-      <div class="burst-grid">
-
-        <div>
-          <div class="panel-section-label">Wall-clock latency</div>
-          <div class="stat-row"><span class="k">p50</span><span class="v" id="bp-p50">—</span></div>
-          <div class="stat-row"><span class="k">p95</span><span class="v" id="bp-p95">—</span></div>
-          <div class="stat-row"><span class="k">p99</span><span class="v" id="bp-p99">—</span></div>
-          <div class="stat-row"><span class="k">min</span><span class="v" id="bp-min">—</span></div>
-          <div class="stat-row"><span class="k">max</span><span class="v" id="bp-max">—</span></div>
-        </div>
-
-        <div>
-          <div class="panel-section-label">Throughput</div>
-          <div class="stat-row"><span class="k">requests/sec</span><span class="v" id="bp-rps">—</span></div>
-          <div class="stat-row"><span class="k">total time</span><span class="v" id="bp-total">—</span></div>
-          <div class="panel-section-label" style="margin-top:18px;">Cache</div>
-          <div class="stat-row"><span class="k">hits / total</span><span class="v hit" id="bp-cache">—</span></div>
-          <div class="stat-row"><span class="k">hit rate</span><span class="v hit" id="bp-hitrate">—</span></div>
-        </div>
-
-        <div>
-          <div class="panel-section-label">Latency breakdown — median request</div>
-          <div id="bp-breakdown"></div>
-        </div>
-
       </div>
     </div>
 

@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { JSX } from 'react';
 import { fetchModelStatus, runPredict, runPredictTimed, loadModel, unloadModel } from '../utils/api';
-import type { ModelStatus, PredictTimed } from '../utils/api';
+import type { ModelStatus } from '../utils/api';
 import './Benchmark.css';
 
 const INITIAL_TEXT = 'This was the best movie of all time.';
@@ -30,16 +30,6 @@ function percentile(sorted: number[], p: number): number {
 //             TYPES                          //
 // ------------------------------------------ //
 
-interface BurstResult {
-  n: number;
-  p50: number; p95: number; p99: number;
-  min: number; max: number;
-  rps: string;
-  totalMs: number;
-  cacheHits: number;
-  median: PredictTimed;
-}
-
 // ------------------------------------------ //
 //             SUB-COMPONENTS                 //
 // ------------------------------------------ //
@@ -58,74 +48,6 @@ function KvRow({ label, value, status }: KvRowProps): JSX.Element {
     <div className="bm-kv-row">
       <span className="bm-kv-k">{label}:</span>
       <span className={cls}>{isEmpty ? '—' : String(value)}</span>
-    </div>
-  );
-}
-
-interface BurstPanelProps { result: BurstResult; }
-
-/** Renders p50/p95/p99 stats, throughput, cache hit rate, and a latency breakdown bar chart. */
-function BurstPanel({ result }: BurstPanelProps): JSX.Element {
-  const { n, p50, p95, p99, min, max, rps, totalMs, cacheHits, median } = result;
-  const net_ms      = Math.max(0, median.wall_ms - median.server_ms);
-  const overhead_ms = Math.max(0, median.server_ms - median.inference_ms);
-  const total       = median.wall_ms;
-
-  const breakdownRows = median.cache_hit
-    ? [{ label: 'Network + Redis (no inference)', ms: total,                          model: true  }]
-    : [
-        { label: 'Model forward pass',   ms: Math.round(median.inference_ms), model: true  },
-        { label: 'Server overhead',      ms: Math.round(overhead_ms),         model: false },
-        { label: 'Network (round-trip)', ms: Math.round(net_ms),              model: false },
-      ];
-
-  return (
-    <div className="bm-burst-panel">
-      <h2 className="bm-panel-h2">Burst Results — {n} concurrent requests</h2>
-      <div className="bm-burst-grid">
-
-        <div>
-          <div className="bm-section-label">Wall-clock latency</div>
-          {([['p50', p50], ['p95', p95], ['p99', p99], ['min', min], ['max', max]] as const).map(([k, v]) => (
-            <div key={k} className="bm-stat-row">
-              <span className="bm-stat-k">{k}</span>
-              <span className="bm-stat-v">{v} ms</span>
-            </div>
-          ))}
-        </div>
-
-        <div>
-          <div className="bm-section-label">Throughput</div>
-          <div className="bm-stat-row"><span className="bm-stat-k">requests/sec</span><span className="bm-stat-v">{rps}</span></div>
-          <div className="bm-stat-row"><span className="bm-stat-k">total time</span><span className="bm-stat-v">{totalMs} ms</span></div>
-          <div className="bm-section-label bm-section-label--mt">Cache</div>
-          <div className="bm-stat-row"><span className="bm-stat-k">hits / total</span><span className="bm-stat-v bm-stat-v--hit">{cacheHits} / {n}</span></div>
-          <div className="bm-stat-row"><span className="bm-stat-k">hit rate</span><span className="bm-stat-v bm-stat-v--hit">{((cacheHits / n) * 100).toFixed(0)}%</span></div>
-        </div>
-
-        <div>
-          <div className="bm-section-label">Latency breakdown — median request</div>
-          {breakdownRows.map(({ label, ms, model }) => {
-            const pct = total > 0 ? Math.min(100, Math.round((ms / total) * 100)) : 0;
-            return (
-              <div key={label} className="bm-breakdown-row">
-                <span className="bm-br-label">{label}</span>
-                <span className="bm-br-val">{ms} ms</span>
-                <div className="bm-br-bar-wrap">
-                  <div className={`bm-br-bar${model ? ' bm-br-bar--model' : ''}`} style={{ width: `${pct}%` }} />
-                </div>
-                <span className="bm-br-pct">{pct}%</span>
-              </div>
-            );
-          })}
-          <div className="bm-breakdown-row bm-breakdown-row--total">
-            <span className="bm-br-label bm-br-label--total">Total</span>
-            <span className="bm-br-val bm-br-val--total">{total} ms</span>
-            <div /><div />
-          </div>
-        </div>
-
-      </div>
     </div>
   );
 }
@@ -157,7 +79,6 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
   const [kvStatus, setKvStatus]     = useState<ModelStatus>({});
   const [running, setRunning]       = useState(false);
   const [burstRunning, setBurstRunning] = useState(false);
-  const [burstResult, setBurstResult]   = useState<BurstResult | null>(null);
 
   // ------------------------------------------ //
   //             API ACTIONS                    //
@@ -179,7 +100,6 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
 
   const predict = useCallback(async (): Promise<void> => {
     setRunning(true);
-    setBurstResult(null);
     try {
       const { data, ms, cache_hit } = await runPredict(text);
       
@@ -220,9 +140,7 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
       const p99   = percentile(walls, 99);
       const rps   = (n / (elapsed / 1000)).toFixed(1);
       const hits  = results.filter(r => r.cache_hit).length;
-      const median = results.find(r => r.wall_ms === p50) ?? results[Math.floor(results.length / 2)];
 
-      setBurstResult({ n, p50, p95, p99, min: walls[0], max: walls[walls.length - 1], rps, totalMs: Math.round(elapsed), cacheHits: hits, median });
       _appendLog(`POST /predict ×${n} (burst)`, { p50, p95, p99, rps: +rps, cache_hits: hits }, Math.round(elapsed));
       await refreshStatus();
     } finally {
@@ -295,8 +213,6 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
           </div>
         </div>
       </div>
-
-      {burstResult !== null && <BurstPanel result={burstResult} />}
 
       <div className="bm-grid">
 
