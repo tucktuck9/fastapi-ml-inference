@@ -40,7 +40,6 @@ from schemas import (
     AdminUnloadResponse,
     EmotionScore,
     HealthResponse,
-    ModelStatus,
     MovieRatings,
     MovieResponse,
     PredictionResult,
@@ -189,7 +188,7 @@ def ready() -> ReadyResponse:
 def admin_status() -> AdminStatusResponse:
     """Return detailed status information about the model manager."""
     return AdminStatusResponse(
-        **manager.status(),
+        **manager.status().model_dump(),
         eager_load=EAGER_LOAD,
         inference_gate=gate_status(),
     )
@@ -202,7 +201,7 @@ def admin_load() -> AdminLoadResponse:
     return AdminLoadResponse(
         status="ok",
         loaded_now=loaded_now,
-        state=ModelStatus(**manager.status()),
+        state=manager.status(),
     )
 
 
@@ -213,7 +212,7 @@ def admin_unload() -> AdminUnloadResponse:
     return AdminUnloadResponse(
         status="ok",
         unloaded=unloaded,
-        state=ModelStatus(**manager.status()),
+        state=manager.status(),
     )
 
 

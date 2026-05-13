@@ -14,6 +14,7 @@ import logging
 import os
 import threading
 import time
+from dataclasses import dataclass
 from typing import Any
 
 import torch
@@ -28,8 +29,18 @@ from config import (
     TORCH_NUM_THREADS,
     WARMUP_TEXT,
 )
+from schemas import ModelStatus
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _ModelArtifacts:
+    """Successfully loaded model components, ready to be published as state."""
+
+    model: Any
+    tokenizer: Any
+    id2label: dict[int, str]
 
 
 class ModelManager:
@@ -103,18 +114,44 @@ class ModelManager:
 
         Flow:
         1. Fast-path return if already loaded.
-        2. If another thread is loading, wait on the condition variable.
-        3. Otherwise, claim the load slot, perform the load outside the lock,
-           and publish state under the lock when done.
+        2. Claim the load slot, or wait for an in-flight load to finish.
+        3. Fetch artifacts (download + quantize) outside the lock.
+        4. Publish artifacts atomically and wake any waiters.
+        5. Run a single warmup inference.
         """
+        if self._already_loaded():
+            return False
+
+        if not self._begin_load():
+            return False
+
+        try:
+            artifacts, elapsed = self._fetch_and_prepare_model()
+        except BaseException as exc:  # noqa: BLE001 — re-raised after cleanup
+            self._fail_load(exc)
+            raise
+
+        self._publish_artifacts(artifacts, elapsed)
+        self._run_warmup()
+        return True
+
+    def _already_loaded(self) -> bool:
+        """Fast-path: True if the model is already loaded and ready."""
         with self._load_cv:
             if self._loaded and self._model is not None:
                 self._ready = True
-                return False
+                return True
+            return False
 
+    def _begin_load(self) -> bool:
+        """Claim the load slot, or wait for an in-flight loader to finish.
+
+        Returns True if this caller should perform the load, False if another
+        thread completed the load successfully. Raises if the in-flight loader
+        failed.
+        """
+        with self._load_cv:
             if self._loading:
-                # Wait until the in-flight loader signals completion. Whoever
-                # finishes will call notify_all() under the same lock.
                 self._load_cv.wait_for(lambda: not self._loading)
                 if self._load_error is not None:
                     raise RuntimeError(
@@ -124,68 +161,71 @@ class ModelManager:
                     raise RuntimeError("Model load completed but state is invalid")
                 return False
 
-            # Claim the load slot.
             self._loading = True
             self._ready = False
             self._load_error = None
+            return True
 
-        # Perform the actual load outside the lock so /ready, /status, and
-        # other callers stay responsive during the multi-second download.
-        load_exc: BaseException | None = None
-        tokenizer = None
-        model = None
-        load_elapsed = 0.0
+    def _fetch_and_prepare_model(self) -> tuple[_ModelArtifacts, float]:
+        """Download tokenizer/model and apply quantization.
+
+        Pure function — does not mutate manager state. Runs outside the lock so
+        /ready, /status, and other callers stay responsive during the
+        multi-second download. Returns the loaded artifacts plus elapsed
+        seconds for logging.
+        """
+        start = time.perf_counter()
+
+        tokenizer = AutoTokenizer.from_pretrained(
+            self.model_id, revision=self.model_revision
+        )
+        model = AutoModelForSequenceClassification.from_pretrained(
+            self.model_id, revision=self.model_revision
+        )
+        model.eval()
+
+        if QUANTIZE_MODEL:
+            model = self._maybe_quantize(model)
+
+        elapsed = round(time.perf_counter() - start, 2)
+        return (
+            _ModelArtifacts(
+                model=model,
+                tokenizer=tokenizer,
+                id2label=model.config.id2label,
+            ),
+            elapsed,
+        )
+
+    def _maybe_quantize(self, model: Any) -> Any:
+        """Apply INT8 dynamic quantization, falling back gracefully if incompatible with architecture (e.g., Apple M4)."""
         try:
-            start = time.perf_counter()
-
-            tokenizer = AutoTokenizer.from_pretrained(
-                self.model_id, revision=self.model_revision
+            quantized = quantize_dynamic(
+                model, {torch.nn.Linear}, dtype=torch.qint8
             )
-            model = AutoModelForSequenceClassification.from_pretrained(
-                self.model_id, revision=self.model_revision
+            logger.info("Dynamic quantization applied successfully")
+            return quantized
+        except RuntimeError as e:
+            logger.warning(
+                "Quantization failed (%s); running without quantization", e
             )
-            model.eval()
+            return model
 
-            if QUANTIZE_MODEL:
-                try:
-                    model = quantize_dynamic(
-                        model, {torch.nn.Linear}, dtype=torch.qint8
-                    )
-                    logger.info("Dynamic quantization applied successfully")
-                except RuntimeError as e:
-                    logger.warning(
-                        "Quantization failed (%s); running without quantization", e
-                    )
-
-            load_elapsed = round(time.perf_counter() - start, 2)
-        except BaseException as exc:  # noqa: BLE001 — we re-raise after cleanup
-            load_exc = exc
-            logger.exception("Model load failed for model_id=%s", self.model_id)
-
-        # Publish state (success or failure) and wake up any waiters.
+    def _publish_artifacts(
+        self, artifacts: _ModelArtifacts, elapsed: float
+    ) -> None:
+        """Atomically publish loaded artifacts as the new state and wake waiters."""
         with self._load_cv:
-            if load_exc is None:
-                self._model = model
-                self._tokenizer = tokenizer
-                self._id2label = model.config.id2label
-                self._loaded = True
-                self._ready = True
-                self._loaded_at = time.time()
-                self._last_used_at = time.time()
-                self._load_error = None
-            else:
-                self._model = None
-                self._tokenizer = None
-                self._id2label = {}
-                self._loaded = False
-                self._ready = False
-                self._load_error = load_exc
-
+            self._model = artifacts.model
+            self._tokenizer = artifacts.tokenizer
+            self._id2label = artifacts.id2label
+            self._loaded = True
+            self._ready = True
+            self._loaded_at = time.time()
+            self._last_used_at = time.time()
+            self._load_error = None
             self._loading = False
             self._load_cv.notify_all()
-
-        if load_exc is not None:
-            raise load_exc
 
         logger.info(
             "[model_manager] loaded model_id=%s revision=%s hf_home=%s "
@@ -193,20 +233,37 @@ class ModelManager:
             self.model_id,
             self.model_revision or "latest",
             self.hf_home,
-            load_elapsed,
+            elapsed,
             QUANTIZE_MODEL,
         )
 
-        # Warmup runs after the load is fully published, so /ready is already
-        # true by the time we get here. Failures are non-fatal.
-        if WARMUP_TEXT:
-            try:
-                self.predict(WARMUP_TEXT)
-                logger.info("[model_manager] warmup complete text=%r", WARMUP_TEXT)
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("[model_manager] warmup failed (non-fatal): %s", exc)
+    def _fail_load(self, exc: BaseException) -> None:
+        """Record load failure and wake waiting threads.
 
-        return True
+        Must be called from inside an ``except`` block so ``logger.exception``
+        captures the active traceback.
+        """
+        with self._load_cv:
+            self._model = None
+            self._tokenizer = None
+            self._id2label = {}
+            self._loaded = False
+            self._ready = False
+            self._load_error = exc
+            self._loading = False
+            self._load_cv.notify_all()
+
+        logger.exception("Model load failed for model_id=%s", self.model_id)
+
+    def _run_warmup(self) -> None:
+        """Run a single warmup inference. Failures are non-fatal."""
+        if not WARMUP_TEXT:
+            return
+        try:
+            self.predict(WARMUP_TEXT)
+            logger.info("[model_manager] warmup complete text=%r", WARMUP_TEXT)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[model_manager] warmup failed (non-fatal): %s", exc)
 
     def unload_model(self) -> bool:
         """Unload the model from memory and run garbage collection."""
@@ -377,21 +434,21 @@ class ModelManager:
         with self._lock:
             return self._ready and self._model is not None
 
-    def status(self) -> dict[str, Any]:
-        """Current state snapshot — safe to expose on a /status endpoint.
+    def status(self) -> ModelStatus:
+        """Immutable snapshot of manager state — safe to share across threads.
 
         Note: ``eager_load`` is intentionally not included here. The
         ``/admin/status`` handler in ``main.py`` passes it explicitly as a
         keyword argument when constructing ``AdminStatusResponse``.
         """
         with self._lock:
-            return {
-                "model_id": self.model_id,
-                "hf_home": self.hf_home,
-                "loaded": self._loaded,
-                "ready": self._ready and self._model is not None,
-                "loading": self._loading,
-                "loaded_at": self._loaded_at,
-                "last_used_at": self._last_used_at,
-                "idle_unload_seconds": self.idle_unload_seconds,
-            }
+            return ModelStatus(
+                model_id=self.model_id,
+                hf_home=self.hf_home,
+                loaded=self._loaded,
+                ready=self._ready and self._model is not None,
+                loading=self._loading,
+                loaded_at=self._loaded_at,
+                last_used_at=self._last_used_at,
+                idle_unload_seconds=float(self.idle_unload_seconds),
+            )
