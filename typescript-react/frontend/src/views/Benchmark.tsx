@@ -179,7 +179,21 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
     await refreshStatus();
   }, [_appendLog, refreshStatus]);
 
-  useEffect(() => { void refreshStatus(); }, [refreshStatus]);
+  useEffect(() => {
+    void refreshStatus();
+    
+    // Poll every 3 seconds if unreachable (e.g. backend is still starting up)
+    const interval = setInterval(() => {
+      setSumState(current => {
+        if (current === 'Unreachable') {
+          void refreshStatus();
+        }
+        return current;
+      });
+    }, 3000);
+    
+    return () => clearInterval(interval);
+  }, [refreshStatus]);
 
   const busy = running || burstRunning || refreshing;
 

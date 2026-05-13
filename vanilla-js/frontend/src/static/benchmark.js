@@ -284,4 +284,15 @@ async function unloadModel() {
 //             INITIALIZATION                 //
 // ------------------------------------------ //
 
-refreshStatus();
+async function init() {
+  await refreshStatus();
+  
+  // Poll every 3 seconds if unreachable (e.g. backend is still starting up)
+  setInterval(async () => {
+    if (currentState === 'Unreachable' && !isBusy) {
+      await refreshStatus();
+    }
+  }, 3000);
+}
+
+init();
