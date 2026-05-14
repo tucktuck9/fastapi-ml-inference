@@ -82,6 +82,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await http_clients.init_clients()
     cleanup_task = asyncio.create_task(_idle_cleanup_loop())
     pubsub_task = asyncio.create_task(_redis_subscription_loop())
+
+    if EAGER_LOAD:
+        print("[startup] eager loading model...")
+        try:
+            await asyncio.to_thread(manager.load_model)
+        except Exception as exc:
+            print(f"[startup] eager model load failed: {exc}")
+
     try:
         yield
     finally:
