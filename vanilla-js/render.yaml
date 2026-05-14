@@ -57,10 +57,11 @@ services:
           type: redis
           name: fastapi-ml-inference-cache
           property: connectionString
-      # Match the Pro plan's 2 vCPUs. If you raise this, make sure
-      # WEB_CONCURRENCY × model memory still fits comfortably in RAM.
+      # Ordinarily, you would match this to your plan's vCPUs (e.g., 2 for Pro).
+      # We restrict to 1 worker so dynamic Load/Unload doesn't duplicate 
+      # memory and cause an OOM error. PyTorch threads handle the CPU scaling.
       - key: WEB_CONCURRENCY
-        value: "2"
+        value: "1"
 
   # Private (pserv) service: no public URL, only reachable over Render's
   # internal network from the backend. The browser cannot hit this directly.
