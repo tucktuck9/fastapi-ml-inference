@@ -279,8 +279,6 @@ async def predict(payload: PredictRequest) -> PredictResponse:
 
     try:
         start = time.perf_counter()
-        if not manager.is_loaded():
-            await cache.publish_admin_command("LOAD")
         async with inference_gate():
             raw = await asyncio.to_thread(manager.predict, text)
         latency_ms = round((time.perf_counter() - start) * 1000, 2)
@@ -402,8 +400,6 @@ async def _infer_and_cache(
     and it runs in a thread pool worker via asyncio.to_thread so the ASGI
     event loop stays free.
     """
-    if not manager.is_loaded():
-        await cache.publish_admin_command("LOAD")
     async with inference_gate():
         preds, inference_ms = await asyncio.to_thread(
             classify_reviews_chunked, reviews, manager.predict_batch

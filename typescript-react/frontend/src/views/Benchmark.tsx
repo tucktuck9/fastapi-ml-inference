@@ -26,6 +26,19 @@ function percentile(sorted: number[], p: number): number {
   return sorted[Math.max(0, Math.min(idx, sorted.length - 1))];
 }
 
+async function waitForStatus(
+  predicate: (data: ModelStatus) => boolean,
+  { timeoutMs = 30000, intervalMs = 500 }: { timeoutMs?: number; intervalMs?: number } = {},
+): Promise<ModelStatus | null> {
+  const t0 = performance.now();
+  while (performance.now() - t0 < timeoutMs) {
+    const data = await fetchModelStatus();
+    if (data && predicate(data)) return data;
+    await new Promise(r => setTimeout(r, intervalMs));
+  }
+  return null;
+}
+
 // ------------------------------------------ //
 //             TYPES                          //
 // ------------------------------------------ //
@@ -38,6 +51,13 @@ interface KvRowProps {
   label: string;
   value: string | number | boolean | null | undefined;
   status?: 'ok' | 'warn';
+}
+
+interface PredictLogPayload {
+  cache_hit?: boolean;
+  latency_ms?: number;
+  result?: { inference_ms?: number; [key: string]: unknown };
+  [key: string]: unknown;
 }
 
 /** A single key-value row inside a status card. */
@@ -101,25 +121,14 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
     return data;
   }, []);
 
-  const manualRefresh = useCallback(async (): Promise<void> => {
-    setRefreshing(true);
-    try {
-      const data = await refreshStatus();
-      if (data) {
-        _appendLog('GET /admin/status', data);
-      }
-    } finally {
-      setRefreshing(false);
-    }
-  }, [refreshStatus, _appendLog]);
-
   const predict = useCallback(async (): Promise<void> => {
     setRunning(true);
     try {
       const { data, ms, cache_hit } = await runPredict(text);
+      const payload = data as PredictLogPayload;
       
-      const server_ms = (data as any).latency_ms ?? 0;
-      const inference_ms = (data as any).result?.inference_ms ?? 0;
+      const server_ms = payload.latency_ms ?? 0;
+      const inference_ms = payload.result?.inference_ms ?? 0;
       const net_ms = Math.max(0, ms - server_ms);
       const overhead_ms = Math.max(0, server_ms - inference_ms);
       
@@ -131,7 +140,7 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
             network_round_trip_ms: Math.round(net_ms)
           };
           
-      const payloadToLog = { ...(data as any), breakdown };
+      const payloadToLog = { ...payload, breakdown };
 
       const label = cache_hit ? 'POST /predict [CACHE HIT]' : 'POST /predict';
       setSumLatency(ms + ' ms' + (cache_hit ? ' ⚡ cached' : ''));
@@ -163,21 +172,23 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
     }
   }, [text, _appendLog, refreshStatus]);
 
-  const _loadModel = useCallback(async (): Promise<void> => {
-    setSumState('Loading');
+  const toggleModel = useCallback(async (): Promise<void> => {
+    const isLoad = ['Unloaded', 'Unreachable', 'Unknown'].includes(sumState);
+    const endpoint = isLoad ? loadModel : unloadModel;
+    
+    setRefreshing(true);
+    setSumState(isLoad ? 'Loading' : 'Unloading');
     setSumLatency('— ms');
-    const data = await loadModel();
-    _appendLog('POST /admin/load', data);
-    await refreshStatus();
-  }, [_appendLog, refreshStatus]);
-
-  const _unloadModel = useCallback(async (): Promise<void> => {
-    setSumState('Unloading');
-    setSumLatency('— ms');
-    const data = await unloadModel();
-    _appendLog('POST /admin/unload', data);
-    await refreshStatus();
-  }, [_appendLog, refreshStatus]);
+    
+    try {
+      const data = await endpoint();
+      _appendLog(isLoad ? 'POST /admin/load' : 'POST /admin/unload', data);
+      await waitForStatus(d => isLoad ? d.ready === true : d.loaded === false);
+    } finally {
+      setRefreshing(false);
+      await refreshStatus();
+    }
+  }, [sumState, _appendLog, refreshStatus]);
 
   useEffect(() => {
     void refreshStatus();
@@ -196,6 +207,13 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
   }, [refreshStatus]);
 
   const busy = running || burstRunning || refreshing;
+  // Do not let the benchmark trigger lazy per-worker reloads after Unload.
+  const modelReady = sumState === 'Ready' || sumState === 'Loaded';
+  const inferenceDisabled = busy || !modelReady;
+  const inferenceTooltip = modelReady ? undefined : "Click 'Load Model' to enable inference.";
+
+  const toggleIsLoading = sumState === 'Loading' || sumState === 'Unloading';
+  const toggleLabel = toggleIsLoading ? `${sumState}...` : (modelReady ? 'Unload Model' : 'Load Model');
 
   // ------------------------------------------ //
   //             RENDER                         //
@@ -224,18 +242,31 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
           onChange={e => setText(e.target.value)}
         />
         <div className="bm-run-row" style={{ marginTop: '14px' }}>
-          <button type="button" className="bm-btn primary" onClick={() => void predict()} disabled={busy}>
+          <button
+            type="button"
+            className="bm-btn primary"
+            onClick={() => void predict()}
+            disabled={inferenceDisabled}
+            title={inferenceTooltip}
+          >
             &#9654;&nbsp; Run Inference
           </button>
           <div className="bm-run-summary">
-            <span className="bm-val">Status: <span className={`bm-status-dot ${sumState.toLowerCase()}`} />{sumState}</span>
+            <span className="bm-val">Status: <span className={`bm-status-dot bm-${sumState.toLowerCase()}`} />{sumState}</span>
             <span className="bm-arrow"> | </span>
             <span className="bm-val">Latency: {sumLatency}</span>
           </div>
           <div className="bm-burst-controls">
             <span className="bm-burst-lbl">Concurrent Requests:</span>
             {BURST_SIZES.map(n => (
-              <button type="button" key={n} className="bm-btn" onClick={() => void runBurst(n)} disabled={busy}>
+              <button
+                type="button"
+                key={n}
+                className="bm-btn"
+                onClick={() => void runBurst(n)}
+                disabled={inferenceDisabled}
+                title={inferenceTooltip}
+              >
                 {n}&times;
               </button>
             ))}
@@ -260,17 +291,8 @@ export default function BenchmarkPage({ onBack }: BenchmarkPageProps): JSX.Eleme
           <h2 className="bm-panel-h2">Status Preview</h2>
 
           <div className="bm-controls" style={{ marginTop: 0, marginBottom: '24px' }}>
-            {sumState === 'Unloaded' || sumState === 'Unreachable' || sumState === 'Unknown' || sumState === 'Loading' ? (
-              <button type="button" className="bm-btn" onClick={() => void _loadModel()} disabled={busy || sumState === 'Loading'}>
-                {sumState === 'Loading' ? 'Loading...' : 'Load Model'}
-              </button>
-            ) : (
-              <button type="button" className="bm-btn" onClick={() => void _unloadModel()} disabled={busy || sumState === 'Unloading'}>
-                {sumState === 'Unloading' ? 'Unloading...' : 'Unload Model'}
-              </button>
-            )}
-            <button type="button" className="bm-btn" onClick={() => void manualRefresh()} disabled={busy}>
-              {refreshing ? 'Refreshing...' : 'Refresh Status'}
+            <button type="button" className="bm-btn" onClick={() => void toggleModel()} disabled={busy || toggleIsLoading}>
+              {toggleLabel}
             </button>
           </div>
 
