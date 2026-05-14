@@ -53,82 +53,80 @@ function updateStatusUI(state) {
   
   const toggleBtn = document.getElementById('btn-toggle-model');
   if (toggleBtn) {
-    if (state === 'Loading' || state === 'Unloading' || isBusy) {
-      toggleBtn.disabled = true;
-      toggleBtn.textContent = state === 'Loading' ? 'Loading...' : (state === 'Unloading' ? 'Unloading...' : toggleBtn.textContent);
+    toggleBtn.disabled = isBusy || state === 'Loading' || state === 'Unloading';
+    toggleBtn.onclick = toggleModel;
+    if (['Unloaded', 'Unreachable', 'Unknown'].includes(state)) {
+      toggleBtn.textContent = 'Load Model';
+    } else if (['Ready', 'Loaded'].includes(state)) {
+      toggleBtn.textContent = 'Unload Model';
     } else {
-      toggleBtn.disabled = false;
-      if (state === 'Unloaded' || state === 'Unreachable' || state === 'Unknown') {
-        toggleBtn.textContent = 'Load Model';
-        toggleBtn.onclick = loadModel;
-      } else {
-        toggleBtn.textContent = 'Unload Model';
-        toggleBtn.onclick = unloadModel;
-      }
+      toggleBtn.textContent = state + '...';
     }
   }
   
-  const refreshBtn = document.getElementById('btn-refresh');
-  if (refreshBtn) refreshBtn.disabled = isBusy;
-  
-  const predictBtn = document.getElementById('btn-predict');
-  if (predictBtn) predictBtn.disabled = isBusy;
-  
-  const burstBtns = document.querySelectorAll('.btn-burst');
-  burstBtns.forEach(btn => btn.disabled = isBusy);
+  const ready = state === 'Ready' || state === 'Loaded';
+  const setBtn = (btn) => { if(btn) { btn.disabled = isBusy || !ready; btn.title = ready ? '' : "Click 'Load Model' to enable inference."; } };
+  setBtn(document.getElementById('btn-predict'));
+  document.querySelectorAll('.btn-burst').forEach(setBtn);
 }
 
-/**
- * Refresh the model status from the backend.
- * 
- * Flow:
- * 1. Fetches status from the admin endpoint.
- * 2. Updates the key-value display elements.
- * 3. Updates the summary header.
- * 
- * @returns {Promise<void>}
- */
-async function refreshStatus() {
+async function fetchStatus() {
   try {
     // Bypass browser cache for fresh data (does not affect backend Redis cache)
     const resp = await fetch(API_BASE + '/admin/status', { cache: 'no-store' });
-    const data = await resp.json();
-    setKV('kv-model-id', data.model_id);
-    setKV('kv-loaded', data.loaded, data.loaded ? 'ok' : 'warn');
-    setKV('kv-ready', data.ready, data.ready ? 'ok' : 'warn');
-    setKV('kv-eager', data.eager_load);
-    setKV('kv-idle', data.idle_unload_seconds);
-    setKV('kv-last', data.last_used_at);
-    setKV('kv-hfhome', data.hf_home);
-
-    currentState = data.ready ? 'Ready' : (data.loaded ? 'Loaded' : 'Unloaded');
-    updateStatusUI(currentState);
-    return data;
+    return await resp.json();
   } catch (err) {
     console.error("Error fetching status:", err);
-    currentState = 'Unreachable';
-    updateStatusUI(currentState);
     return null;
   }
 }
 
-/**
- * Manually refresh the model status from the backend and log the result.
- */
-async function manualRefresh() {
-  const btn = document.getElementById('btn-refresh');
-  if (btn) btn.textContent = 'Refreshing...';
+async function refreshStatus() {
+  const data = await fetchStatus();
+  if (!data) {
+    currentState = 'Unreachable';
+    updateStatusUI(currentState);
+    return null;
+  }
+  setKV('kv-model-id', data.model_id);
+  setKV('kv-loaded', data.loaded, data.loaded ? 'ok' : 'warn');
+  setKV('kv-ready', data.ready, data.ready ? 'ok' : 'warn');
+  setKV('kv-eager', data.eager_load);
+  setKV('kv-idle', data.idle_unload_seconds);
+  setKV('kv-last', data.last_used_at);
+  setKV('kv-hfhome', data.hf_home);
+  currentState = data.ready ? 'Ready' : (data.loaded ? 'Loaded' : 'Unloaded');
+  updateStatusUI(currentState);
+  return data;
+}
+
+async function waitForStatus(predicate, { timeoutMs = 30000, intervalMs = 500 } = {}) {
+  const t0 = performance.now();
+  while (performance.now() - t0 < timeoutMs) {
+    const data = await fetchStatus();
+    if (data && predicate(data)) return data;
+    await new Promise(r => setTimeout(r, intervalMs));
+  }
+  return null;
+}
+
+async function toggleModel() {
+  const isLoad = ['Unloaded', 'Unreachable', 'Unknown'].includes(currentState);
+  const endpoint = isLoad ? '/admin/load' : '/admin/unload';
+  
+  currentState = isLoad ? 'Loading' : 'Unloading';
   isBusy = true;
   updateStatusUI(currentState);
-  
-  const data = await refreshStatus();
-  if (data) {
-    appendLog('GET /admin/status', data);
+  document.getElementById('sum-latency').textContent = '— ms';
+
+  try {
+    const resp = await fetch(API_BASE + endpoint, { method: 'POST' });
+    appendLog(`POST ${endpoint}`, await resp.json());
+    await waitForStatus(d => isLoad ? d.ready === true : d.loaded === false);
+  } finally {
+    isBusy = false;
+    await refreshStatus();
   }
-  
-  isBusy = false;
-  updateStatusUI(currentState);
-  if (btn) btn.textContent = 'Refresh Status';
 }
 
 // ------------------------------------------ //
@@ -250,36 +248,6 @@ async function predict() {
   await refreshStatus();
 }
 
-/**
- * Force load the model into memory.
- * @returns {Promise<void>}
- */
-async function loadModel() {
-  currentState = 'Loading';
-  updateStatusUI(currentState);
-  document.getElementById('sum-latency').textContent = '— ms';
-
-  const resp = await fetch(API_BASE + '/admin/load', { method: 'POST' });
-  const data = await resp.json();
-  appendLog('POST /admin/load', data);
-  await refreshStatus();
-}
-
-/**
- * Force unload the model from memory.
- * @returns {Promise<void>}
- */
-async function unloadModel() {
-  currentState = 'Unloading';
-  updateStatusUI(currentState);
-  document.getElementById('sum-latency').textContent = '— ms';
-
-  const resp = await fetch(API_BASE + '/admin/unload', { method: 'POST' });
-  const data = await resp.json();
-  appendLog('POST /admin/unload', data);
-  await refreshStatus();
-}
-
 // ------------------------------------------ //
 //             INITIALIZATION                 //
 // ------------------------------------------ //
@@ -294,5 +262,10 @@ async function init() {
     }
   }, 3000);
 }
+
+// Expose explicitly to window to avoid any potential scope issues
+window.predict = predict;
+window.runBurst = runBurst;
+window.toggleModel = toggleModel;
 
 init();

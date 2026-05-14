@@ -90,6 +90,34 @@ async def set_emotions(review_id: str, emotions: list[dict]) -> None:
 
 
 # ------------------------------------------ #
+#             PUB/SUB HELPERS                #
+# ------------------------------------------ #
+
+
+async def publish_admin_command(command: str) -> None:
+    """Publish an admin command to all workers."""
+    if not _client:
+        return
+    try:
+        await _client.publish("model_admin_events", command)
+    except Exception as exc:
+        logger.warning("[cache] publish failed: %s", exc)
+
+
+async def subscribe_admin_commands() -> aioredis.client.PubSub | None:
+    """Subscribe to the admin commands channel."""
+    if not _client:
+        return None
+    try:
+        pubsub = _client.pubsub()
+        await pubsub.subscribe("model_admin_events")
+        return pubsub
+    except Exception as exc:
+        logger.warning("[cache] subscribe failed: %s", exc)
+        return None
+
+
+# ------------------------------------------ #
 #             HEALTH                         #
 # ------------------------------------------ #
 

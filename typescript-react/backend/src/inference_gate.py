@@ -21,6 +21,7 @@ The route handler catches InferenceBusy and returns 503 with Retry-After.
 
 import asyncio
 import logging
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -49,43 +50,46 @@ class InferenceBusy(Exception):
 # ------------------------------------------ #
 
 
+def _is_at_capacity() -> bool:
+    """Return True if the inference gate is at capacity."""
+    return _semaphore.locked()
+
+
+def _log_capacity_warning() -> None:
+    """Log a warning that the inference gate is at capacity."""
+    if INFERENCE_QUEUE_TIMEOUT_MS > 0:
+        logger.warning("[gate] at capacity — %d/%d slots in use; waiting up to %d ms", _inflight, INFERENCE_CONCURRENCY, INFERENCE_QUEUE_TIMEOUT_MS)
+    else:
+        logger.warning("[gate] at capacity — %d/%d slots in use; waiting", _inflight, INFERENCE_CONCURRENCY)
+
+
+async def _wait_for_slot() -> float:
+    """
+    Wait for an inference slot to become available.
+    Raises InferenceBusy if the timeout is exceeded.
+    Returns the wait time in milliseconds.
+    """
+    t0 = time.perf_counter()
+    timeout_s = (INFERENCE_QUEUE_TIMEOUT_MS / 1000.0) if INFERENCE_QUEUE_TIMEOUT_MS > 0 else None
+    
+    try:
+        await asyncio.wait_for(_semaphore.acquire(), timeout=timeout_s)
+    except TimeoutError as exc:
+        logger.error("[gate] rejected after %d ms — %d/%d slots occupied", INFERENCE_QUEUE_TIMEOUT_MS, _inflight, INFERENCE_CONCURRENCY)
+        raise InferenceBusy(f"Inference gate busy after {INFERENCE_QUEUE_TIMEOUT_MS} ms") from exc
+        
+    return round((time.perf_counter() - t0) * 1000, 1)
+
+
 async def _acquire() -> None:
     """Acquire the semaphore, raising InferenceBusy if the wait budget expires."""
-    if _inflight >= INFERENCE_CONCURRENCY:
-        if INFERENCE_QUEUE_TIMEOUT_MS > 0:
-            logger.warning(
-                "[gate] at capacity — %d/%d slots in use; waiting up to %d ms",
-                _inflight,
-                INFERENCE_CONCURRENCY,
-                INFERENCE_QUEUE_TIMEOUT_MS,
-            )
-        else:
-            logger.warning(
-                "[gate] at capacity — %d/%d slots in use; waiting",
-                _inflight,
-                INFERENCE_CONCURRENCY,
-            )
-
-    if INFERENCE_QUEUE_TIMEOUT_MS > 0:
-        try:
-            await asyncio.wait_for(
-                _semaphore.acquire(),
-                timeout=INFERENCE_QUEUE_TIMEOUT_MS / 1000.0,
-            )
-        except TimeoutError as exc:
-            logger.error(
-                "[gate] rejected after %d ms — %d/%d slots occupied",
-                INFERENCE_QUEUE_TIMEOUT_MS,
-                _inflight,
-                INFERENCE_CONCURRENCY,
-            )
-            raise InferenceBusy(
-                f"Inference gate busy after {INFERENCE_QUEUE_TIMEOUT_MS} ms"
-            ) from exc
-    else:
+    if not _is_at_capacity():
         await _semaphore.acquire()
-
-    logger.debug("[gate] acquired — %d/%d slots now in use", _inflight + 1, INFERENCE_CONCURRENCY)
+        logger.debug("[gate] acquired — %d/%d slots now in use", _inflight + 1, INFERENCE_CONCURRENCY)
+    else:
+        _log_capacity_warning()
+        wait_ms = await _wait_for_slot()
+        logger.warning("[gate] acquired after waiting %.1f ms — %d/%d slots now in use", wait_ms, _inflight + 1, INFERENCE_CONCURRENCY)
 
 
 @asynccontextmanager

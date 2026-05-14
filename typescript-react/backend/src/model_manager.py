@@ -207,7 +207,7 @@ class ModelManager:
             return quantized
         except RuntimeError as e:
             logger.warning(
-                "Quantization failed (%s); running without quantization", e
+                "Quantization incompatible with architecture: (%s); running without quantization", e
             )
             return model
 

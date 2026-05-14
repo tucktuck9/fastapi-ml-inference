@@ -59,6 +59,7 @@ manager = ModelManager(
 )
 
 cleanup_task = None
+pubsub_task = None
 
 
 # ------------------------------------------ #
@@ -69,26 +70,27 @@ cleanup_task = None
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
-    Manage the application lifecycle, including eager model loading and background tasks.
+    Manage the application lifecycle, including background tasks.
 
     Flow:
-    1. Eagerly loads model in a background thread if EAGER_LOAD is true.
-    2. Starts the idle cleanup loop background task.
-    3. Yields control to the FastAPI application.
-    4. Cancels the cleanup task and unloads the model on shutdown.
+    1. Starts the idle cleanup loop background task.
+    2. Yields control to the FastAPI application.
+    3. Cancels the cleanup task and unloads the model on shutdown.
     """
-    global cleanup_task
+    global cleanup_task, pubsub_task
     await cache.init_redis()
     await http_clients.init_clients()
-    if EAGER_LOAD:
-        try:
-            await asyncio.to_thread(manager.load_model)
-        except Exception as exc:
-            print(f"[startup] eager model load failed: {exc}")
     cleanup_task = asyncio.create_task(_idle_cleanup_loop())
+    pubsub_task = asyncio.create_task(_redis_subscription_loop())
     try:
         yield
     finally:
+        if pubsub_task:
+            pubsub_task.cancel()
+            try:
+                await pubsub_task
+            except asyncio.CancelledError:
+                pass
         if cleanup_task:
             cleanup_task.cancel()
             try:
@@ -133,6 +135,34 @@ app.include_router(library_router)
 # ------------------------------------------ #
 #             BACKGROUND TASKS               #
 # ------------------------------------------ #
+
+
+async def _process_admin_command(message: dict) -> None:
+    """Process a single admin command from Redis."""
+    if message and message.get("type") == "message":
+        command = message.get("data")
+        if isinstance(command, bytes):
+            command = command.decode("utf-8")
+        if command == "UNLOAD":
+            await asyncio.to_thread(manager.unload_model)
+        elif command == "LOAD":
+            await asyncio.to_thread(manager.load_model)
+
+
+async def _redis_subscription_loop() -> None:
+    """Background task to listen for admin commands via Redis."""
+    pubsub = await cache.subscribe_admin_commands()
+    if not pubsub:
+        return
+    try:
+        async for message in pubsub.listen():
+            await _process_admin_command(message)
+    except asyncio.CancelledError:
+        pass
+    except Exception as exc:
+        print(f"[pubsub] loop failed: {exc}")
+    finally:
+        await pubsub.close()
 
 
 async def _idle_cleanup_loop() -> None:
@@ -195,23 +225,23 @@ def admin_status() -> AdminStatusResponse:
 
 
 @app.post("/admin/load", tags=["admin"])
-def admin_load() -> AdminLoadResponse:
+async def admin_load() -> AdminLoadResponse:
     """Force the model to load into memory."""
-    loaded_now = manager.load_model()
+    await cache.publish_admin_command("LOAD")
     return AdminLoadResponse(
         status="ok",
-        loaded_now=loaded_now,
+        loaded_now=True,
         state=manager.status(),
     )
 
 
 @app.post("/admin/unload", tags=["admin"])
-def admin_unload() -> AdminUnloadResponse:
+async def admin_unload() -> AdminUnloadResponse:
     """Force the model to unload from memory."""
-    unloaded = manager.unload_model()
+    await cache.publish_admin_command("UNLOAD")
     return AdminUnloadResponse(
         status="ok",
-        unloaded=unloaded,
+        unloaded=True,
         state=manager.status(),
     )
 
