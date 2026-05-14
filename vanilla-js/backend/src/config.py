@@ -28,7 +28,7 @@ QUANTIZE_MODEL = os.getenv("QUANTIZE_MODEL", "true").lower() == "true"
 WARMUP_TEXT = os.getenv("WARMUP_TEXT", "This movie was absolutely fantastic.")
 
 # PyTorch
-TORCH_NUM_THREADS = int(os.getenv("TORCH_NUM_THREADS", "2"))
+TORCH_NUM_THREADS = int(os.getenv("TORCH_NUM_THREADS", "1"))
 TORCH_INTEROP_THREADS = int(os.getenv("TORCH_INTEROP_THREADS", "1"))
 INFERENCE_CONCURRENCY = int(os.getenv("INFERENCE_CONCURRENCY", str(TORCH_NUM_THREADS)))
 INFERENCE_QUEUE_TIMEOUT_MS = int(os.getenv("INFERENCE_QUEUE_TIMEOUT_MS", "0"))
