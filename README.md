@@ -4,12 +4,6 @@
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/tucktuck9/fastapi-ml-inference)
 
-## Live demo
-
-- 🎭 [Movie Vibes UI](https://fastapi-ml-inference-frontend-3xhq.onrender.com/) 
-- 📊 [Inference Benchmark UI](https://fastapi-ml-inference-frontend-3xhq.onrender.com/benchmark) 
-- 🎬 [Movie Vibes API docs](https://fastapi-ml-inference-backend-namw.onrender.com/docs)
-
 ## What you'll build
 
 A movie discovery app that scores the emotional tone of movie reviews using an open-source text-classification model. The stack is made up of:
